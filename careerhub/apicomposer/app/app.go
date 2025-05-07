@@ -93,13 +93,13 @@ func Run(mainCtx context.Context) {
 	reviewService := review.NewReviewService(reviewClient)
 
 	jobPostingRouter := rootRouter.NewRoute().Subrouter()
-	jobPostingRouter.Use(middleware.CheckHasAuthority(user_authority.AuthorityReadJobPosting))
+	// jobPostingRouter.Use(middleware.CheckHasAuthority(user_authority.AuthorityReadJobPosting))
 	controller.NewJobPostingController(postingService).RegisterRoutes(jobPostingRouter)
 
 	//userinfoRouter 설정
 	userinfoRouter := rootRouter.PathPrefix("/my").Subrouter()
 	scrapJobRouter := userinfoRouter.NewRoute().Subrouter()
-	scrapJobRouter.Use(middleware.CheckHasAuthority(user_authority.AuthorityScrapJob))
+	// scrapJobRouter.Use(middleware.CheckHasAuthority(user_authority.AuthorityScrapJob))
 	controller.NewScrapJobController(scrapJobService).RegisterRoutes(scrapJobRouter)
 
 	//matchJobRouter 설정
@@ -109,7 +109,7 @@ func Run(mainCtx context.Context) {
 
 	//reviewRouter 설정
 	reviewRouter := rootRouter.NewRoute().Subrouter()
-	reviewRouter.Use(middleware.CheckHasAuthority(user_authority.AuthorityReadReview))
+	// reviewRouter.Use(middleware.CheckHasAuthority(user_authority.AuthorityReadReview))
 	controller.NewReviewController(reviewService).RegisterRoutes(reviewRouter)
 
 	var allowOrigins []string

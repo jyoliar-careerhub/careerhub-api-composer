@@ -6,7 +6,6 @@ import (
 
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/common/domain"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/common/query"
-	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/common/user_authority"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/jwtresolver"
 	postingGrpc "github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/posting/restapi_grpc"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/review"
@@ -38,20 +37,20 @@ func (p *PostingService) JobPostingsWithClaims(ctx context.Context, req *JobPost
 		return nil, err
 	}
 
-	var scrapJobsChan <-chan async.Result[[]*domain.ScrapJob]
-	var companyScoresChan <-chan async.Result[*reviewGrpc.GetCompanyScoresResponse]
+	// var scrapJobsChan <-chan async.Result[[]*domain.ScrapJob]
+	// var companyScoresChan <-chan async.Result[*reviewGrpc.GetCompanyScoresResponse]
 
-	if claims.HasAuthority(user_authority.AuthorityScrapJob) {
-		scrapJobsChan = async.ExecAsync(func() ([]*domain.ScrapJob, error) {
-			return p.getScrapJobsByPostingIds(ctx, claims.UserId, domain.GetJobPostingIds(jobPostings))
-		})
-	}
+	// if claims.HasAuthority(user_authority.AuthorityScrapJob) {
+	scrapJobsChan := async.ExecAsync(func() ([]*domain.ScrapJob, error) {
+		return p.getScrapJobsByPostingIds(ctx, claims.UserId, domain.GetJobPostingIds(jobPostings))
+	})
+	// }
 
-	if claims.HasAuthority(user_authority.AuthorityReadReview) {
-		companyScoresChan = async.ExecAsync(func() (*reviewGrpc.GetCompanyScoresResponse, error) {
-			return p.reviewClient.GetCompanyScores(ctx, &reviewGrpc.GetCompanyScoresRequest{Site: domain.ReviewSite, CompanyNames: domain.GetCompanyNames(jobPostings)})
-		})
-	}
+	// if claims.HasAuthority(user_authority.AuthorityReadReview) {
+	// 	companyScoresChan = async.ExecAsync(func() (*reviewGrpc.GetCompanyScoresResponse, error) {
+	// 		return p.reviewClient.GetCompanyScores(ctx, &reviewGrpc.GetCompanyScoresRequest{Site: domain.ReviewSite, CompanyNames: domain.GetCompanyNames(jobPostings)})
+	// 	})
+	// }
 
 	if scrapJobsChan != nil {
 		scrapJobsResult := <-scrapJobsChan
@@ -66,6 +65,12 @@ func (p *PostingService) JobPostingsWithClaims(ctx context.Context, req *JobPost
 		}
 	}
 
+	// attachCompanyScores(jobPostings, companyScoresChan)
+
+	return jobPostings, nil
+}
+
+func attachCompanyScores(ctx context.Context, jobPostings []*domain.JobPosting, companyScoresChan <-chan async.Result[*reviewGrpc.GetCompanyScoresResponse]) {
 	if companyScoresChan != nil {
 		companyScoresResult := <-companyScoresChan
 
@@ -82,8 +87,6 @@ func (p *PostingService) JobPostingsWithClaims(ctx context.Context, req *JobPost
 			}
 		}
 	}
-
-	return jobPostings, nil
 }
 
 func convertQueryReqToGrpc(queryReq *query.Query) *postingGrpc.QueryReq {
@@ -132,6 +135,12 @@ func (p *PostingService) JobPostings(ctx context.Context, req *JobPostingsReques
 	}
 
 	jobPostingResList := domain.ConvertGrpcToJobPostingResList(jobPostings.JobPostings)
+
+	companyScoresChan := async.ExecAsync(func() (*reviewGrpc.GetCompanyScoresResponse, error) {
+		return p.reviewClient.GetCompanyScores(ctx, &reviewGrpc.GetCompanyScoresRequest{Site: domain.ReviewSite, CompanyNames: domain.GetCompanyNames(jobPostingResList)})
+	})
+
+	attachCompanyScores(ctx, jobPostingResList, companyScoresChan)
 
 	return jobPostingResList, nil
 }
@@ -187,45 +196,18 @@ func (p *PostingService) JobPostingDetailWithClaims(ctx context.Context, req *po
 		return nil, isExist, err
 	}
 
-	var scrapJobsChan <-chan async.Result[[]*domain.ScrapJob]
-	var companyReviewInfoChan <-chan async.Result[optional.Optional[CompanyReviewInfo]]
+	// var scrapJobsChan <-chan async.Result[[]*domain.ScrapJob]
+	// var companyReviewInfoChan <-chan async.Result[optional.Optional[CompanyReviewInfo]]
 
-	if claims.HasAuthority(user_authority.AuthorityScrapJob) {
-		scrapJobsChan = async.ExecAsync(func() ([]*domain.ScrapJob, error) {
-			return p.getScrapJobsByPostingIds(ctx, claims.UserId, []*domain.JobPostingId{{Site: res.Site, PostingId: res.PostingId}})
-		})
-	}
+	// if claims.HasAuthority(user_authority.AuthorityScrapJob) {
+	scrapJobsChan := async.ExecAsync(func() ([]*domain.ScrapJob, error) {
+		return p.getScrapJobsByPostingIds(ctx, claims.UserId, []*domain.JobPostingId{{Site: res.Site, PostingId: res.PostingId}})
+	})
+	// }
 
-	if claims.HasAuthority(user_authority.AuthorityReadReview) {
-		companyReviewInfoChan = async.ExecAsync(func() (optional.Optional[CompanyReviewInfo], error) {
-			companyScore, err := p.reviewClient.GetCompanyScores(ctx, &reviewGrpc.GetCompanyScoresRequest{Site: domain.ReviewSite, CompanyNames: []string{res.CompanyName}})
-			if err != nil {
-				return optional.NewEmptyOptional[CompanyReviewInfo](), err
-			}
-
-			if companyScore.CompanyScores[res.CompanyName] != nil {
-				var companyReviewInfo CompanyReviewInfo
-				companyReviewInfo.CompanyScore = companyScore.CompanyScores[res.CompanyName]
-
-				reviewsRes, err := p.reviewClient.GetCompanyReviews(ctx, &reviewGrpc.GetCompanyReviewsRequest{
-					Site:        domain.ReviewSite,
-					CompanyName: res.CompanyName,
-					Offset:      0,
-					Limit:       review.DefaultSize,
-				})
-
-				if err != nil {
-					return optional.NewEmptyOptional[CompanyReviewInfo](), err
-				}
-
-				companyReviewInfo.Reviews = reviewsRes.Reviews
-				return optional.NewOptional(&companyReviewInfo), nil
-			} else {
-				return optional.NewEmptyOptional[CompanyReviewInfo](), nil
-			}
-
-		})
-	}
+	// if claims.HasAuthority(user_authority.AuthorityReadReview) {
+	// 	companyReviewInfoChan = getFirstReviewPage(ctx, res.CompanyName)
+	// }
 
 	if scrapJobsChan != nil {
 		scrapJobsResult := <-scrapJobsChan
@@ -257,6 +239,41 @@ func (p *PostingService) JobPostingDetailWithClaims(ctx context.Context, req *po
 		}
 	}
 
+	// attachReviewInfo(ctx, companyReviewInfoChan, res)
+
+	return res, true, nil
+}
+func (p *PostingService) getFirstReviewPage(ctx context.Context, companyName string) <-chan async.Result[optional.Optional[CompanyReviewInfo]] {
+	return async.ExecAsync(func() (optional.Optional[CompanyReviewInfo], error) {
+		companyScore, err := p.reviewClient.GetCompanyScores(ctx, &reviewGrpc.GetCompanyScoresRequest{Site: domain.ReviewSite, CompanyNames: []string{companyName}})
+		if err != nil {
+			return optional.NewEmptyOptional[CompanyReviewInfo](), err
+		}
+
+		if companyScore.CompanyScores[companyName] != nil {
+			var companyReviewInfo CompanyReviewInfo
+			companyReviewInfo.CompanyScore = companyScore.CompanyScores[companyName]
+
+			reviewsRes, err := p.reviewClient.GetCompanyReviews(ctx, &reviewGrpc.GetCompanyReviewsRequest{
+				Site:        domain.ReviewSite,
+				CompanyName: companyName,
+				Offset:      0,
+				Limit:       review.DefaultSize,
+			})
+
+			if err != nil {
+				return optional.NewEmptyOptional[CompanyReviewInfo](), err
+			}
+
+			companyReviewInfo.Reviews = reviewsRes.Reviews
+			return optional.NewOptional(&companyReviewInfo), nil
+		} else {
+			return optional.NewEmptyOptional[CompanyReviewInfo](), nil
+		}
+	})
+}
+
+func attachReviewInfo(ctx context.Context, companyReviewInfoChan <-chan async.Result[optional.Optional[CompanyReviewInfo]], res *domain.JobPostingDetail) {
 	if companyReviewInfoChan != nil {
 		companyScoresResult := <-companyReviewInfoChan
 
@@ -272,8 +289,6 @@ func (p *PostingService) JobPostingDetailWithClaims(ctx context.Context, req *po
 			}
 		}
 	}
-
-	return res, true, nil
 }
 
 func (p *PostingService) JobPostingDetail(ctx context.Context, req *postingGrpc.JobPostingDetailRequest) (*domain.JobPostingDetail, bool, error) {
@@ -286,7 +301,11 @@ func (p *PostingService) JobPostingDetail(ctx context.Context, req *postingGrpc.
 		return nil, false, nil
 	}
 
-	return domain.ConvertGrpcToJobPostingDetail(res.Detail), true, nil
+	jobPostingDetail := domain.ConvertGrpcToJobPostingDetail(res.Detail)
+
+	companyReviewInfoChan := p.getFirstReviewPage(ctx, jobPostingDetail.CompanyName)
+	attachReviewInfo(ctx, companyReviewInfoChan, jobPostingDetail)
+	return jobPostingDetail, true, nil
 }
 
 func (p *PostingService) Categories(ctx context.Context) (*postingGrpc.CategoriesResponse, error) {
