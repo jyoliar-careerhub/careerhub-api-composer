@@ -79,3 +79,29 @@ HTTP 요청 → Gorilla Mux Router → Middleware(TraceID, JWT) → Controller �
 - **google.golang.org/grpc** — gRPC 클라이언트
 - **github.com/jae2274/goutils** — 로깅(llog), 에러 핸들링(terr), 미들웨어(mw) 유틸리티
 - **testify** — 테스트 assertion
+
+
+## 문서 파일명 규칙
+
+`docs/` 디렉토리의 문서 파일명은 `YYMMDDHHmm_제목.md` 형식으로 작성합니다. prefix는 문서 최초 생성 시각(KST)을 나타내며, 이를 통해 파일명 정렬만으로 생성 시간순 정렬이 가능합니다.
+
+```
+예시: 2603251254_refactoring-plan.md  (2026년 3월 25일 12시 54분 생성)
+```
+
+## 문서 작성 포맷
+
+`docs/` 디렉토리에 계획서·분석서 등 문서를 작성할 때 아래 헤더를 반드시 포함합니다:
+
+```markdown
+# 문서 제목
+
+**작성일**: YYYY-MM-DD HH:MM (KST)
+**최종 수정일**: YYYY-MM-DD HH:MM (KST)
+**대상 서비스**: 해당 문서가 다루는 서비스 목록 (쉼표 구분)
+
+---
+```
+
+- 날짜와 시간은 한국 표준시(KST, UTC+9) 기준으로 기록합니다.
+- 문서를 수정할 때마다 **최종 수정일**을 갱신합니다.
