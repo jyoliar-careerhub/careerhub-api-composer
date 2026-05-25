@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
@@ -12,6 +13,7 @@ import (
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/controller"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/jwtresolver"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/middleware"
+	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/observability"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/posting"
 	postingGrpc "github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/posting/restapi_grpc"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/review"
@@ -21,8 +23,8 @@ import (
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/vars"
 	"github.com/jae2274/goutils/llog"
 	"github.com/jae2274/goutils/mw"
-	"github.com/jae2274/goutils/mw/grpcmw"
-	"github.com/jae2274/goutils/mw/httpmw"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -39,7 +41,10 @@ const (
 func initLogger(ctx context.Context) error {
 	llog.SetMetadata("service", serviceName)
 	llog.SetMetadata("app", app)
+	// OTel TraceContextLoggerMW가 ctx에 박는 키를 로그에 자동 부착하도록 등록.
+	// 기존 goutils httpmw.SetTraceIdMW가 발급하던 UUID 대신 OTel TraceID(32 hex)가 들어감.
 	llog.SetDefaultContextData(ctxKeyTraceID)
+	llog.SetDefaultContextData(middleware.SpanIDCtxKey)
 
 	hostname, err := os.Hostname()
 	if err != nil {
@@ -52,9 +57,11 @@ func initLogger(ctx context.Context) error {
 }
 
 func createConn(ctx context.Context, endpoint string) (*grpc.ClientConn, error) {
-	return grpc.NewClient(endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithChainStreamInterceptor(grpcmw.SetTraceIdStreamMW()),
-		grpc.WithChainUnaryInterceptor(grpcmw.SetTraceIdUnaryMW()),
+	// otelgrpc StatsHandler가 unary/stream 양쪽 + W3C TraceContext propagation을 자동 처리.
+	// 기존 grpcmw.SetTraceId{Unary,Stream}MW는 폐기 (Phase 4-B 사전 조사 §2.5).
+	return grpc.NewClient(endpoint,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 	)
 }
 
@@ -62,6 +69,17 @@ func Run(mainCtx context.Context) {
 
 	err := initLogger(mainCtx)
 	checkErr(mainCtx, err)
+
+	shutdownTracer, err := observability.InitTracer(mainCtx)
+	checkErr(mainCtx, err)
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if shutdownErr := shutdownTracer(shutdownCtx); shutdownErr != nil {
+			llog.LogErr(mainCtx, shutdownErr)
+		}
+	}()
+
 	llog.Info(mainCtx, "Start Application")
 
 	envVars, err := vars.Variables()
@@ -85,7 +103,15 @@ func Run(mainCtx context.Context) {
 	//rootRouter 설정
 	rootRouter := mux.NewRouter().PathPrefix(envVars.RootPath).Subrouter()
 
-	rootRouter.Use(httpmw.SetTraceIdMW(), middleware.SetClaimsMW(jr))
+	// 미들웨어 체인 순서:
+	//   1) otelmux: incoming traceparent 헤더에서 server span 시작, ctx에 span 주입
+	//   2) TraceContextLoggerMW: ctx의 OTel span에서 trace_id/span_id를 string key로 추출 — goutils llog 호환
+	//   3) SetClaimsMW: JWT 파싱 (기존)
+	rootRouter.Use(
+		otelmux.Middleware(app),
+		middleware.TraceContextLoggerMW(),
+		middleware.SetClaimsMW(jr),
+	)
 
 	postingService := posting.NewPostingService(postingClient, scrapJobClient, reviewClient)
 	matchJobService := userinfo.NewMatchJobService(matchJobClient)
