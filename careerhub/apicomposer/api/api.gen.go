@@ -5,13 +5,19 @@ package api
 
 import (
 	"bytes"
+	"compress/flate"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"path"
+	"strings"
 	"time"
 
+	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/gorilla/mux"
 	"github.com/oapi-codegen/runtime"
 )
@@ -91,8 +97,7 @@ type DeleteConditionRequest struct {
 	ConditionId string `json:"conditionId"`
 }
 
-// ErrorResponse 구조화 에러 응답 — strict 전환된 엔드포인트의 에러 계약.
-// 미전환 엔드포인트는 아직 text/plain(`http.Error`)을 반환한다(전환 시 이 스키마로 수렴).
+// ErrorResponse 구조화 에러 응답 — 전 엔드포인트 공통 에러 계약 (본문 없는 미들웨어 401/403/500 제외)
 type ErrorResponse struct {
 	// Message 사람이 읽을 수 있는 오류 설명
 	Message string `json:"message"`
@@ -286,15 +291,27 @@ type Page = int
 // PageSize defines model for PageSize.
 type PageSize = int
 
+// BadRequest 구조화 에러 응답 — 전 엔드포인트 공통 에러 계약 (본문 없는 미들웨어 401/403/500 제외)
+type BadRequest = ErrorResponse
+
+// InternalServerError 구조화 에러 응답 — 전 엔드포인트 공통 에러 계약 (본문 없는 미들웨어 401/403/500 제외)
+type InternalServerError = ErrorResponse
+
+// NotFound 구조화 에러 응답 — 전 엔드포인트 공통 에러 계약 (본문 없는 미들웨어 401/403/500 제외)
+type NotFound = ErrorResponse
+
+// Unauthorized 구조화 에러 응답 — 전 엔드포인트 공통 에러 계약 (본문 없는 미들웨어 401/403/500 제외)
+type Unauthorized = ErrorResponse
+
 // GetCompaniesParams defines parameters for GetCompanies.
 type GetCompaniesParams struct {
-	// Keyword 회사명 prefix 검색어. 빈 값이면 400 (`keyword is required`)
+	// Keyword 회사명 prefix 검색어 (비어 있으면 400)
 	Keyword string `form:"keyword" json:"keyword"`
 }
 
 // GetCompanyReviewsParams defines parameters for GetCompanyReviews.
 type GetCompanyReviewsParams struct {
-	// CompanyName 회사명. 빈 값이면 400 (`companyName is required`)
+	// CompanyName 회사명 (비어 있으면 400)
 	CompanyName string `form:"companyName" json:"companyName"`
 
 	// Page 0부터 시작하는 페이지 번호 (기본 0). 음수·비정수면 400
@@ -1014,14 +1031,16 @@ func HandlerWithOptions(si ServerInterface, options GorillaServerOptions) http.H
 	return r
 }
 
-type BadRequestTextResponse string
+type BadRequestJSONResponse ErrorResponse
 
 type ForbiddenResponse struct {
 }
 
-type InternalServerErrorTextResponse string
+type InternalServerErrorJSONResponse ErrorResponse
 
-type UnauthorizedTextResponse string
+type NotFoundJSONResponse ErrorResponse
+
+type UnauthorizedJSONResponse ErrorResponse
 
 type UnauthorizedEmptyResponse struct {
 }
@@ -1067,14 +1086,19 @@ func (response GetCategories401Response) VisitGetCategoriesResponse(w http.Respo
 	return nil
 }
 
-type GetCategories500TextResponse InternalServerErrorTextResponse
+type GetCategories500JSONResponse struct {
+	InternalServerErrorJSONResponse
+}
 
-func (response GetCategories500TextResponse) VisitGetCategoriesResponse(w http.ResponseWriter) error {
+func (response GetCategories500JSONResponse) VisitGetCategoriesResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
@@ -1110,14 +1134,17 @@ func (response GetCompanies200JSONResponse) VisitGetCompaniesResponse(w http.Res
 	return err
 }
 
-type GetCompanies400TextResponse BadRequestTextResponse
+type GetCompanies400JSONResponse struct{ BadRequestJSONResponse }
 
-func (response GetCompanies400TextResponse) VisitGetCompaniesResponse(w http.ResponseWriter) error {
+func (response GetCompanies400JSONResponse) VisitGetCompaniesResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
@@ -1128,14 +1155,19 @@ func (response GetCompanies401Response) VisitGetCompaniesResponse(w http.Respons
 	return nil
 }
 
-type GetCompanies500TextResponse InternalServerErrorTextResponse
+type GetCompanies500JSONResponse struct {
+	InternalServerErrorJSONResponse
+}
 
-func (response GetCompanies500TextResponse) VisitGetCompaniesResponse(w http.ResponseWriter) error {
+func (response GetCompanies500JSONResponse) VisitGetCompaniesResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
@@ -1161,7 +1193,7 @@ func (response GetCompanyReviews200JSONResponse) VisitGetCompanyReviewsResponse(
 	return err
 }
 
-type GetCompanyReviews400JSONResponse ErrorResponse
+type GetCompanyReviews400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response GetCompanyReviews400JSONResponse) VisitGetCompanyReviewsResponse(w http.ResponseWriter) error {
 
@@ -1182,7 +1214,9 @@ func (response GetCompanyReviews401Response) VisitGetCompanyReviewsResponse(w ht
 	return nil
 }
 
-type GetCompanyReviews500JSONResponse ErrorResponse
+type GetCompanyReviews500JSONResponse struct {
+	InternalServerErrorJSONResponse
+}
 
 func (response GetCompanyReviews500JSONResponse) VisitGetCompanyReviewsResponse(w http.ResponseWriter) error {
 
@@ -1218,14 +1252,17 @@ func (response GetJobPostings200JSONResponse) VisitGetJobPostingsResponse(w http
 	return err
 }
 
-type GetJobPostings400TextResponse BadRequestTextResponse
+type GetJobPostings400JSONResponse struct{ BadRequestJSONResponse }
 
-func (response GetJobPostings400TextResponse) VisitGetJobPostingsResponse(w http.ResponseWriter) error {
+func (response GetJobPostings400JSONResponse) VisitGetJobPostingsResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
@@ -1236,14 +1273,19 @@ func (response GetJobPostings401Response) VisitGetJobPostingsResponse(w http.Res
 	return nil
 }
 
-type GetJobPostings500TextResponse InternalServerErrorTextResponse
+type GetJobPostings500JSONResponse struct {
+	InternalServerErrorJSONResponse
+}
 
-func (response GetJobPostings500TextResponse) VisitGetJobPostingsResponse(w http.ResponseWriter) error {
+func (response GetJobPostings500JSONResponse) VisitGetJobPostingsResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
@@ -1269,14 +1311,17 @@ func (response CountJobPostings200JSONResponse) VisitCountJobPostingsResponse(w 
 	return err
 }
 
-type CountJobPostings400TextResponse BadRequestTextResponse
+type CountJobPostings400JSONResponse struct{ BadRequestJSONResponse }
 
-func (response CountJobPostings400TextResponse) VisitCountJobPostingsResponse(w http.ResponseWriter) error {
+func (response CountJobPostings400JSONResponse) VisitCountJobPostingsResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
@@ -1287,14 +1332,19 @@ func (response CountJobPostings401Response) VisitCountJobPostingsResponse(w http
 	return nil
 }
 
-type CountJobPostings500TextResponse InternalServerErrorTextResponse
+type CountJobPostings500JSONResponse struct {
+	InternalServerErrorJSONResponse
+}
 
-func (response CountJobPostings500TextResponse) VisitCountJobPostingsResponse(w http.ResponseWriter) error {
+func (response CountJobPostings500JSONResponse) VisitCountJobPostingsResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
@@ -1328,25 +1378,33 @@ func (response GetJobPostingDetail401Response) VisitGetJobPostingDetailResponse(
 	return nil
 }
 
-type GetJobPostingDetail404TextResponse string
+type GetJobPostingDetail404JSONResponse struct{ NotFoundJSONResponse }
 
-func (response GetJobPostingDetail404TextResponse) VisitGetJobPostingDetailResponse(w http.ResponseWriter) error {
+func (response GetJobPostingDetail404JSONResponse) VisitGetJobPostingDetailResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
-type GetJobPostingDetail500TextResponse InternalServerErrorTextResponse
+type GetJobPostingDetail500JSONResponse struct {
+	InternalServerErrorJSONResponse
+}
 
-func (response GetJobPostingDetail500TextResponse) VisitGetJobPostingDetailResponse(w http.ResponseWriter) error {
+func (response GetJobPostingDetail500JSONResponse) VisitGetJobPostingDetailResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
@@ -1385,14 +1443,19 @@ func (response FindMatchJob403Response) VisitFindMatchJobResponse(w http.Respons
 	return nil
 }
 
-type FindMatchJob500TextResponse InternalServerErrorTextResponse
+type FindMatchJob500JSONResponse struct {
+	InternalServerErrorJSONResponse
+}
 
-func (response FindMatchJob500TextResponse) VisitFindMatchJobResponse(w http.ResponseWriter) error {
+func (response FindMatchJob500JSONResponse) VisitFindMatchJobResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
@@ -1432,14 +1495,19 @@ func (response UpdateAgreeToMail403Response) VisitUpdateAgreeToMailResponse(w ht
 	return nil
 }
 
-type UpdateAgreeToMail500TextResponse InternalServerErrorTextResponse
+type UpdateAgreeToMail500JSONResponse struct {
+	InternalServerErrorJSONResponse
+}
 
-func (response UpdateAgreeToMail500TextResponse) VisitUpdateAgreeToMailResponse(w http.ResponseWriter) error {
+func (response UpdateAgreeToMail500JSONResponse) VisitUpdateAgreeToMailResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
@@ -1479,14 +1547,19 @@ func (response DeleteMatchJobCondition403Response) VisitDeleteMatchJobConditionR
 	return nil
 }
 
-type DeleteMatchJobCondition500TextResponse InternalServerErrorTextResponse
+type DeleteMatchJobCondition500JSONResponse struct {
+	InternalServerErrorJSONResponse
+}
 
-func (response DeleteMatchJobCondition500TextResponse) VisitDeleteMatchJobConditionResponse(w http.ResponseWriter) error {
+func (response DeleteMatchJobCondition500JSONResponse) VisitDeleteMatchJobConditionResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
@@ -1526,14 +1599,19 @@ func (response AddMatchJobCondition403Response) VisitAddMatchJobConditionRespons
 	return nil
 }
 
-type AddMatchJobCondition500TextResponse InternalServerErrorTextResponse
+type AddMatchJobCondition500JSONResponse struct {
+	InternalServerErrorJSONResponse
+}
 
-func (response AddMatchJobCondition500TextResponse) VisitAddMatchJobConditionResponse(w http.ResponseWriter) error {
+func (response AddMatchJobCondition500JSONResponse) VisitAddMatchJobConditionResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
@@ -1573,14 +1651,19 @@ func (response UpdateMatchJobCondition403Response) VisitUpdateMatchJobConditionR
 	return nil
 }
 
-type UpdateMatchJobCondition500TextResponse InternalServerErrorTextResponse
+type UpdateMatchJobCondition500JSONResponse struct {
+	InternalServerErrorJSONResponse
+}
 
-func (response UpdateMatchJobCondition500TextResponse) VisitUpdateMatchJobConditionResponse(w http.ResponseWriter) error {
+func (response UpdateMatchJobCondition500JSONResponse) VisitUpdateMatchJobConditionResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
@@ -1600,36 +1683,47 @@ func (response RemoveScrapJob200Response) VisitRemoveScrapJobResponse(w http.Res
 	return nil
 }
 
-type RemoveScrapJob401TextResponse UnauthorizedTextResponse
+type RemoveScrapJob401JSONResponse struct{ UnauthorizedJSONResponse }
 
-func (response RemoveScrapJob401TextResponse) VisitRemoveScrapJobResponse(w http.ResponseWriter) error {
+func (response RemoveScrapJob401JSONResponse) VisitRemoveScrapJobResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
-type RemoveScrapJob404TextResponse string
+type RemoveScrapJob404JSONResponse struct{ NotFoundJSONResponse }
 
-func (response RemoveScrapJob404TextResponse) VisitRemoveScrapJobResponse(w http.ResponseWriter) error {
+func (response RemoveScrapJob404JSONResponse) VisitRemoveScrapJobResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
-type RemoveScrapJob500TextResponse InternalServerErrorTextResponse
+type RemoveScrapJob500JSONResponse struct {
+	InternalServerErrorJSONResponse
+}
 
-func (response RemoveScrapJob500TextResponse) VisitRemoveScrapJobResponse(w http.ResponseWriter) error {
+func (response RemoveScrapJob500JSONResponse) VisitRemoveScrapJobResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
@@ -1655,25 +1749,33 @@ func (response GetScrapJobs200JSONResponse) VisitGetScrapJobsResponse(w http.Res
 	return err
 }
 
-type GetScrapJobs401TextResponse UnauthorizedTextResponse
+type GetScrapJobs401JSONResponse struct{ UnauthorizedJSONResponse }
 
-func (response GetScrapJobs401TextResponse) VisitGetScrapJobsResponse(w http.ResponseWriter) error {
+func (response GetScrapJobs401JSONResponse) VisitGetScrapJobsResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
-type GetScrapJobs500TextResponse InternalServerErrorTextResponse
+type GetScrapJobs500JSONResponse struct {
+	InternalServerErrorJSONResponse
+}
 
-func (response GetScrapJobs500TextResponse) VisitGetScrapJobsResponse(w http.ResponseWriter) error {
+func (response GetScrapJobs500JSONResponse) VisitGetScrapJobsResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
@@ -1693,25 +1795,33 @@ func (response AddScrapJob201Response) VisitAddScrapJobResponse(w http.ResponseW
 	return nil
 }
 
-type AddScrapJob401TextResponse UnauthorizedTextResponse
+type AddScrapJob401JSONResponse struct{ UnauthorizedJSONResponse }
 
-func (response AddScrapJob401TextResponse) VisitAddScrapJobResponse(w http.ResponseWriter) error {
+func (response AddScrapJob401JSONResponse) VisitAddScrapJobResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
-type AddScrapJob500TextResponse InternalServerErrorTextResponse
+type AddScrapJob500JSONResponse struct {
+	InternalServerErrorJSONResponse
+}
 
-func (response AddScrapJob500TextResponse) VisitAddScrapJobResponse(w http.ResponseWriter) error {
+func (response AddScrapJob500JSONResponse) VisitAddScrapJobResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
@@ -1731,36 +1841,47 @@ func (response RemoveScrapTag200Response) VisitRemoveScrapTagResponse(w http.Res
 	return nil
 }
 
-type RemoveScrapTag401TextResponse UnauthorizedTextResponse
+type RemoveScrapTag401JSONResponse struct{ UnauthorizedJSONResponse }
 
-func (response RemoveScrapTag401TextResponse) VisitRemoveScrapTagResponse(w http.ResponseWriter) error {
+func (response RemoveScrapTag401JSONResponse) VisitRemoveScrapTagResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
-type RemoveScrapTag404TextResponse string
+type RemoveScrapTag404JSONResponse struct{ NotFoundJSONResponse }
 
-func (response RemoveScrapTag404TextResponse) VisitRemoveScrapTagResponse(w http.ResponseWriter) error {
+func (response RemoveScrapTag404JSONResponse) VisitRemoveScrapTagResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
-type RemoveScrapTag500TextResponse InternalServerErrorTextResponse
+type RemoveScrapTag500JSONResponse struct {
+	InternalServerErrorJSONResponse
+}
 
-func (response RemoveScrapTag500TextResponse) VisitRemoveScrapTagResponse(w http.ResponseWriter) error {
+func (response RemoveScrapTag500JSONResponse) VisitRemoveScrapTagResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
@@ -1785,25 +1906,33 @@ func (response GetScrapTags200JSONResponse) VisitGetScrapTagsResponse(w http.Res
 	return err
 }
 
-type GetScrapTags401TextResponse UnauthorizedTextResponse
+type GetScrapTags401JSONResponse struct{ UnauthorizedJSONResponse }
 
-func (response GetScrapTags401TextResponse) VisitGetScrapTagsResponse(w http.ResponseWriter) error {
+func (response GetScrapTags401JSONResponse) VisitGetScrapTagsResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
-type GetScrapTags500TextResponse InternalServerErrorTextResponse
+type GetScrapTags500JSONResponse struct {
+	InternalServerErrorJSONResponse
+}
 
-func (response GetScrapTags500TextResponse) VisitGetScrapTagsResponse(w http.ResponseWriter) error {
+func (response GetScrapTags500JSONResponse) VisitGetScrapTagsResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
@@ -1823,36 +1952,47 @@ func (response AddScrapTag200Response) VisitAddScrapTagResponse(w http.ResponseW
 	return nil
 }
 
-type AddScrapTag401TextResponse UnauthorizedTextResponse
+type AddScrapTag401JSONResponse struct{ UnauthorizedJSONResponse }
 
-func (response AddScrapTag401TextResponse) VisitAddScrapTagResponse(w http.ResponseWriter) error {
+func (response AddScrapTag401JSONResponse) VisitAddScrapTagResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
-type AddScrapTag404TextResponse string
+type AddScrapTag404JSONResponse struct{ NotFoundJSONResponse }
 
-func (response AddScrapTag404TextResponse) VisitAddScrapTagResponse(w http.ResponseWriter) error {
+func (response AddScrapTag404JSONResponse) VisitAddScrapTagResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
-type AddScrapTag500TextResponse InternalServerErrorTextResponse
+type AddScrapTag500JSONResponse struct {
+	InternalServerErrorJSONResponse
+}
 
-func (response AddScrapTag500TextResponse) VisitAddScrapTagResponse(w http.ResponseWriter) error {
+func (response AddScrapTag500JSONResponse) VisitAddScrapTagResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
@@ -1877,25 +2017,33 @@ func (response GetUntaggedScrapJobs200JSONResponse) VisitGetUntaggedScrapJobsRes
 	return err
 }
 
-type GetUntaggedScrapJobs401TextResponse UnauthorizedTextResponse
+type GetUntaggedScrapJobs401JSONResponse struct{ UnauthorizedJSONResponse }
 
-func (response GetUntaggedScrapJobs401TextResponse) VisitGetUntaggedScrapJobsResponse(w http.ResponseWriter) error {
+func (response GetUntaggedScrapJobs401JSONResponse) VisitGetUntaggedScrapJobsResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
-type GetUntaggedScrapJobs500TextResponse InternalServerErrorTextResponse
+type GetUntaggedScrapJobs500JSONResponse struct {
+	InternalServerErrorJSONResponse
+}
 
-func (response GetUntaggedScrapJobs500TextResponse) VisitGetUntaggedScrapJobsResponse(w http.ResponseWriter) error {
+func (response GetUntaggedScrapJobs500JSONResponse) VisitGetUntaggedScrapJobsResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
@@ -1937,14 +2085,19 @@ func (response GetSkills401Response) VisitGetSkillsResponse(w http.ResponseWrite
 	return nil
 }
 
-type GetSkills500TextResponse InternalServerErrorTextResponse
+type GetSkills500JSONResponse struct {
+	InternalServerErrorJSONResponse
+}
 
-func (response GetSkills500TextResponse) VisitGetSkillsResponse(w http.ResponseWriter) error {
+func (response GetSkills500JSONResponse) VisitGetSkillsResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
@@ -2571,4 +2724,183 @@ func (sh *strictHandler) GetSkills(w http.ResponseWriter, r *http.Request) {
 	} else if response != nil {
 		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
 	}
+}
+
+// Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
+// Stored as a slice of fixed-width chunks rather than one concatenated
+// const string: with thousands of chunks the chained `+` fold is several
+// times slower for the Go compiler than parsing a slice literal.
+var swaggerSpec = []string{
+	"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",
+	"HfkMqbp/l8AlvrBnnNecU5y/O///AQAA//8=",
+}
+
+// decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,
+// after base64-decoding and flate-decompressing the embedded blob.
+func decodeSpec() ([]byte, error) {
+	encoded := strings.Join(swaggerSpec, "")
+	compressed, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("error base64 decoding spec: %w", err)
+	}
+	zr := flate.NewReader(bytes.NewReader(compressed))
+	var buf bytes.Buffer
+	if _, err := buf.ReadFrom(zr); err != nil {
+		return nil, fmt.Errorf("read flate: %w", err)
+	}
+	if err := zr.Close(); err != nil {
+		return nil, fmt.Errorf("close flate reader: %w", err)
+	}
+
+	return buf.Bytes(), nil
+}
+
+var rawSpec = decodeSpecCached()
+
+// a naive cache of the decoded OpenAPI spec
+func decodeSpecCached() func() ([]byte, error) {
+	data, err := decodeSpec()
+	return func() ([]byte, error) {
+		return data, err
+	}
+}
+
+// Constructs a synthetic filesystem for resolving external references when loading openapi specifications.
+func PathToRawSpec(pathToFile string) map[string]func() ([]byte, error) {
+	res := make(map[string]func() ([]byte, error))
+	if len(pathToFile) > 0 {
+		res[pathToFile] = rawSpec
+	}
+
+	return res
+}
+
+// GetSpec returns the OpenAPI specification corresponding to the generated
+// code in this file. External references in the spec are resolved through
+// PathToRawSpec; externally-referenced files must be embedded in their
+// corresponding Go packages (via the import-mapping feature). URL-based
+// external refs are not supported.
+func GetSpec() (swagger *openapi3.T, err error) {
+	resolvePath := PathToRawSpec("")
+
+	loader := openapi3.NewLoader()
+	loader.IsExternalRefsAllowed = true
+	loader.ReadFromURIFunc = func(loader *openapi3.Loader, url *url.URL) ([]byte, error) {
+		pathToFile := url.String()
+		pathToFile = path.Clean(pathToFile)
+		getSpec, ok := resolvePath[pathToFile]
+		if !ok {
+			err1 := fmt.Errorf("path not found: %s", pathToFile)
+			return nil, err1
+		}
+		return getSpec()
+	}
+	var specData []byte
+	specData, err = rawSpec()
+	if err != nil {
+		return
+	}
+	swagger, err = loader.LoadFromData(specData)
+	if err != nil {
+		return
+	}
+	return
+}
+
+// GetSpecJSON returns the raw JSON bytes of the embedded OpenAPI
+// specification: decompressed but not unmarshaled. External references
+// are not resolved here; the bytes are the spec exactly as embedded by
+// codegen. The result is cached at package init time, so repeated calls
+// are cheap.
+func GetSpecJSON() ([]byte, error) {
+	return rawSpec()
+}
+
+// GetSwagger returns the OpenAPI specification corresponding to the
+// generated code in this file.
+//
+// Deprecated: GetSwagger predates kin-openapi renaming openapi3.Swagger
+// to openapi3.T. Use [GetSpec] instead. This wrapper is retained for
+// backwards compatibility.
+func GetSwagger() (*openapi3.T, error) {
+	return GetSpec()
 }

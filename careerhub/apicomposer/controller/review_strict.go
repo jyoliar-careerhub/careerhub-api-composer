@@ -28,39 +28,28 @@ func NewReviewStrictController(reviewService *review.ReviewService) *ReviewStric
 	return &ReviewStrictController{reviewService: reviewService}
 }
 
-// 시그니처 구속: 명세가 바뀌어 생성 타입이 달라지면 여기서 컴파일이 깨진다.
-// 전 메서드 구현이 끝나는 일괄 전환 시점에 var _ api.StrictServerInterface = ... 단언으로 대체한다.
-var _ func(context.Context, api.GetCompanyReviewsRequestObject) (api.GetCompanyReviewsResponseObject, error) = (&ReviewStrictController{}).GetCompanyReviews
+// 시그니처 구속은 strict.go의 전체 인터페이스 단언(var _ api.StrictServerInterface)이 한다 —
+// 일괄 전환(#18)으로 파일럿 시절의 메서드별 구속 선언을 대체했다.
 
 func (c *ReviewStrictController) GetCompanyReviews(ctx context.Context, request api.GetCompanyReviewsRequestObject) (api.GetCompanyReviewsResponseObject, error) {
 	params := request.Params
 
-	// 검증·기본값은 기존 핸들러(review_controller.go)와 동작 동일하게 유지한다 — 성공 계약 불변
+	// 형식 검증(음수·빈 companyName 등)은 명세 검증 미들웨어(NewSpecValidationMW)가 이미 했다 —
+	// 여기엔 기본값 적용만 남는다(#14의 패턴 정련: 구현에는 명세로 표현 불가한 검증만 남긴다)
 	page := review.InitPage
 	if params.Page != nil {
-		if *params.Page < review.InitPage {
-			return api.GetCompanyReviews400JSONResponse{Message: "Invalid page"}, nil
-		}
 		page = *params.Page
 	}
-
 	size := review.DefaultSize
 	if params.Size != nil {
-		if *params.Size < 0 {
-			return api.GetCompanyReviews400JSONResponse{Message: "Invalid page size"}, nil
-		}
 		size = *params.Size
-	}
-
-	if params.CompanyName == "" {
-		return api.GetCompanyReviews400JSONResponse{Message: "companyName is required"}, nil
 	}
 
 	reviews, err := c.reviewService.GetReviews(ctx, params.CompanyName, page, size)
 	if err != nil {
 		// 오류 원문은 로그로만 — 응답에는 노출하지 않는다 (기존 err.Error() 노출은 에러 계약 개정으로 폐기)
 		llog.LogErr(ctx, err)
-		return api.GetCompanyReviews500JSONResponse{Message: "Internal Server Error"}, nil
+		return api.GetCompanyReviews500JSONResponse{InternalServerErrorJSONResponse: api.InternalServerErrorJSONResponse{Message: "Internal Server Error"}}, nil
 	}
 
 	return api.GetCompanyReviews200JSONResponse(convertReviewsToAPI(reviews)), nil
