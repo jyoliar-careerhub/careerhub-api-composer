@@ -2,7 +2,8 @@ BINARY_NAME=myapp
 CODE_DIR=./careerhub/apicomposer
 CONTAINER_IMAGE_NAME=careerhub-api-composer
 
-include test.env
+# test.env는 로컬 전용(untracked)이라 없을 수 있다 — 없으면 조용히 건너뛴다 (run/test 외 타겟이 죽지 않도록)
+-include test.env
 
 ## build: Build binary
 build:
