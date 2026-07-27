@@ -10,10 +10,274 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/oapi-codegen/runtime"
 )
+
+// Defines values for JobPostingStatus.
+const (
+	Closed JobPostingStatus = "closed"
+	Hiring JobPostingStatus = "hiring"
+)
+
+// Valid indicates whether the value is a known member of the JobPostingStatus enum.
+func (e JobPostingStatus) Valid() bool {
+	switch e {
+	case Closed:
+		return true
+	case Hiring:
+		return true
+	default:
+		return false
+	}
+}
+
+// AddConditionRequest defines model for AddConditionRequest.
+type AddConditionRequest struct {
+	ConditionName string `json:"conditionName"`
+
+	// Query 채용공고 검색 조건. `encoded_query` 파라미터(base64 JSON)와
+	// 매칭 조건(Condition)의 query 필드에 쓰인다.
+	Query Query `json:"query"`
+}
+
+// CategoriesResponse proto 생성 타입 직렬화 — 빈 값 필드는 생략된다(omitempty)
+type CategoriesResponse struct {
+	CategoriesBySite *[]CategoryRes `json:"categoriesBySite,omitempty"`
+}
+
+// CategoryQuery defines model for CategoryQuery.
+type CategoryQuery struct {
+	CategoryName string `json:"categoryName"`
+	Site         string `json:"site"`
+}
+
+// CategoryRes defines model for CategoryRes.
+type CategoryRes struct {
+	Categories *[]string `json:"categories,omitempty"`
+	Site       *string   `json:"site,omitempty"`
+}
+
+// CompaniesResponse proto 생성 타입 직렬화 — 빈 값 필드는 생략된다(omitempty)
+type CompaniesResponse struct {
+	Companies *[]CompanyRes `json:"companies,omitempty"`
+}
+
+// CompanyRes defines model for CompanyRes.
+type CompanyRes struct {
+	DefaultName   *string           `json:"defaultName,omitempty"`
+	SiteCompanies *[]SiteCompanyRes `json:"siteCompanies,omitempty"`
+}
+
+// Condition defines model for Condition.
+type Condition struct {
+	ConditionId   string `json:"conditionId"`
+	ConditionName string `json:"conditionName"`
+
+	// Query 채용공고 검색 조건. `encoded_query` 파라미터(base64 JSON)와
+	// 매칭 조건(Condition)의 query 필드에 쓰인다.
+	Query Query `json:"query"`
+}
+
+// CountResponse defines model for CountResponse.
+type CountResponse struct {
+	Count int64 `json:"count"`
+}
+
+// DeleteConditionRequest defines model for DeleteConditionRequest.
+type DeleteConditionRequest struct {
+	ConditionId string `json:"conditionId"`
+}
+
+// IsSuccessResponse defines model for IsSuccessResponse.
+type IsSuccessResponse struct {
+	IsSuccess bool `json:"isSuccess"`
+}
+
+// JobPosting 채용공고 목록 항목
+type JobPosting struct {
+	Addresses   *[]string `json:"addresses"`
+	Categories  *[]string `json:"categories"`
+	CompanyName string    `json:"companyName"`
+	ImageUrl    *string   `json:"imageUrl"`
+	MaxCareer   *int32    `json:"maxCareer"`
+	MinCareer   *int32    `json:"minCareer"`
+	PostingId   string    `json:"postingId"`
+
+	// ReviewInfo 회사 리뷰 요약. 리뷰 데이터가 없으면 상위 객체에서 필드 자체가 생략된다.
+	ReviewInfo *ReviewInfo `json:"reviewInfo,omitempty"`
+
+	// ScrapInfo 비로그인 요청이거나 스크랩 정보 로딩에 실패하면 null
+	ScrapInfo *ScrapInfo `json:"scrapInfo"`
+	Site      string     `json:"site"`
+	Skills    *[]string  `json:"skills"`
+
+	// Status 공고 상태. 원천(careerhub-posting-service)의 전체 값 목록이다.
+	Status JobPostingStatus `json:"status"`
+	Title  string           `json:"title"`
+}
+
+// JobPostingDetail 채용공고 상세
+type JobPostingDetail struct {
+	Addresses     *[]string `json:"addresses"`
+	Benefits      string    `json:"benefits"`
+	CareerMax     *int32    `json:"careerMax"`
+	CareerMin     *int32    `json:"careerMin"`
+	CompanyId     string    `json:"companyId"`
+	CompanyImages *[]string `json:"companyImages"`
+	CompanyLogo   string    `json:"companyLogo"`
+	CompanyName   string    `json:"companyName"`
+	CompanyUrl    *string   `json:"companyUrl"`
+
+	// FirstPageReviews 회사 리뷰 첫 페이지 (리뷰 데이터가 없으면 필드 생략)
+	FirstPageReviews *[]Review `json:"firstPageReviews,omitempty"`
+	Intro            string    `json:"intro"`
+	MainTask         string    `json:"mainTask"`
+	PostUrl          string    `json:"postUrl"`
+	PostingId        string    `json:"postingId"`
+	Preferred        string    `json:"preferred"`
+	Qualifications   string    `json:"qualifications"`
+	RecruitProcess   *string   `json:"recruitProcess"`
+
+	// ReviewInfo 회사 리뷰 요약. 리뷰 데이터가 없으면 상위 객체에서 필드 자체가 생략된다.
+	ReviewInfo *ReviewInfo `json:"reviewInfo,omitempty"`
+
+	// ScrapInfo 비로그인 요청이거나 스크랩 정보 로딩에 실패하면 null
+	ScrapInfo *ScrapInfo `json:"scrapInfo"`
+	Site      string     `json:"site"`
+	Skills    *[]string  `json:"skills"`
+
+	// Status 공고 상태. 원천(careerhub-posting-service)의 전체 값 목록이다.
+	Status JobPostingStatus `json:"status"`
+	Tags   *[]string        `json:"tags"`
+	Title  string           `json:"title"`
+}
+
+// JobPostingStatus 공고 상태. 원천(careerhub-posting-service)의 전체 값 목록이다.
+type JobPostingStatus string
+
+// MatchJob defines model for MatchJob.
+type MatchJob struct {
+	AgreeToMail bool        `json:"agreeToMail"`
+	Conditions  []Condition `json:"conditions"`
+}
+
+// Query 채용공고 검색 조건. `encoded_query` 파라미터(base64 JSON)와
+// 매칭 조건(Condition)의 query 필드에 쓰인다.
+type Query struct {
+	Categories *[]CategoryQuery `json:"categories,omitempty"`
+
+	// Companies 매칭 조건(match-job) 응답에서는 항상 null이다
+	Companies *[]SiteCompanyQuery `json:"companies,omitempty"`
+	MaxCareer *int32              `json:"maxCareer,omitempty"`
+	MinCareer *int32              `json:"minCareer,omitempty"`
+
+	// SkillNames 바깥 배열은 AND, 안쪽 배열은 OR 조건
+	SkillNames *[][]string `json:"skillNames,omitempty"`
+}
+
+// Review defines model for Review.
+type Review struct {
+	Date time.Time `json:"date"`
+
+	// EmploymentStatus 리뷰 작성 시점의 재직 여부
+	EmploymentStatus bool   `json:"employmentStatus"`
+	JobType          string `json:"jobType"`
+	ReviewUserId     string `json:"reviewUserId"`
+	Score            int32  `json:"score"`
+	Summary          string `json:"summary"`
+}
+
+// ReviewInfo 회사 리뷰 요약. 리뷰 데이터가 없으면 상위 객체에서 필드 자체가 생략된다.
+type ReviewInfo struct {
+	DefaultName     string `json:"defaultName"`
+	IsCompleteCrawl bool   `json:"isCompleteCrawl"`
+	ReviewCount     int32  `json:"reviewCount"`
+	Score           int32  `json:"score"`
+}
+
+// ScrapInfo defines model for ScrapInfo.
+type ScrapInfo struct {
+	IsScrapped bool     `json:"isScrapped"`
+	Tags       []string `json:"tags"`
+}
+
+// ScrapJob proto 생성 타입 직렬화 — 빈 값 필드는 생략된다(omitempty)
+type ScrapJob struct {
+	PostingId *string   `json:"postingId,omitempty"`
+	Site      *string   `json:"site,omitempty"`
+	Tags      *[]string `json:"tags,omitempty"`
+}
+
+// ScrapJobTarget 스크랩 추가·제거 대상. 요청 본문의 userId 필드는 무시되고
+// 인증 토큰의 userId로 덮어써진다.
+type ScrapJobTarget struct {
+	PostingId string `json:"postingId"`
+	Site      string `json:"site"`
+}
+
+// ScrapTagTarget 태그 추가·제거 대상. 요청 본문의 userId 필드는 무시되고
+// 인증 토큰의 userId로 덮어써진다.
+type ScrapTagTarget struct {
+	PostingId string `json:"postingId"`
+	Site      string `json:"site"`
+	Tag       string `json:"tag"`
+}
+
+// ScrapTagsResponse proto 생성 타입 직렬화 — 태그가 없으면 tags 필드가 생략된다(omitempty)
+type ScrapTagsResponse struct {
+	Tags *[]string `json:"tags,omitempty"`
+}
+
+// SiteCompanyQuery defines model for SiteCompanyQuery.
+type SiteCompanyQuery struct {
+	CompanyName string `json:"companyName"`
+	Site        string `json:"site"`
+}
+
+// SiteCompanyRes defines model for SiteCompanyRes.
+type SiteCompanyRes struct {
+	CompanyId   *string `json:"companyId,omitempty"`
+	CompanyName *string `json:"companyName,omitempty"`
+	Site        *string `json:"site,omitempty"`
+}
+
+// SkillRes defines model for SkillRes.
+type SkillRes struct {
+	DefaultName *string   `json:"defaultName,omitempty"`
+	SkillNames  *[]string `json:"skillNames,omitempty"`
+}
+
+// SkillsResponse proto 생성 타입 직렬화 — 빈 값 필드는 생략된다(omitempty)
+type SkillsResponse struct {
+	Skills *[]SkillRes `json:"skills,omitempty"`
+}
+
+// UpdateAgreeToMailRequest defines model for UpdateAgreeToMailRequest.
+type UpdateAgreeToMailRequest struct {
+	AgreeToMail bool `json:"agreeToMail"`
+}
+
+// UpdateConditionRequest defines model for UpdateConditionRequest.
+type UpdateConditionRequest struct {
+	ConditionId   string `json:"conditionId"`
+	ConditionName string `json:"conditionName"`
+
+	// Query 채용공고 검색 조건. `encoded_query` 파라미터(base64 JSON)와
+	// 매칭 조건(Condition)의 query 필드에 쓰인다.
+	Query Query `json:"query"`
+}
+
+// EncodedQuery defines model for EncodedQuery.
+type EncodedQuery = []byte
+
+// Page defines model for Page.
+type Page = int
+
+// PageSize defines model for PageSize.
+type PageSize = int
 
 // GetCompaniesParams defines parameters for GetCompanies.
 type GetCompaniesParams struct {
@@ -36,15 +300,15 @@ type GetCompanyReviewsParams struct {
 // GetJobPostingsParams defines parameters for GetJobPostings.
 type GetJobPostingsParams struct {
 	// Page 1부터 시작하는 페이지 번호. 누락·비정수·1 미만이면 400
-	Page int `form:"page" json:"page"`
+	Page Page `form:"page" json:"page"`
 
 	// Size 페이지 크기 (1–100). 누락·비정수·범위 밖이면 400
-	Size int `form:"size" json:"size"`
+	Size PageSize `form:"size" json:"size"`
 
 	// EncodedQuery 검색 조건 `Query` 객체의 JSON을 base64(표준, 패딩 포함) 인코딩한 문자열.
 	// 디코딩·파싱에 실패하면 400 (`bad request`).
 	// 검증 실패(minCareer/maxCareer 음수, minCareer > maxCareer)면 400 (검증 메시지 본문).
-	EncodedQuery []byte `form:"encoded_query" json:"encoded_query"`
+	EncodedQuery EncodedQuery `form:"encoded_query" json:"encoded_query"`
 }
 
 // CountJobPostingsParams defines parameters for CountJobPostings.
@@ -52,7 +316,7 @@ type CountJobPostingsParams struct {
 	// EncodedQuery 검색 조건 `Query` 객체의 JSON을 base64(표준, 패딩 포함) 인코딩한 문자열.
 	// 디코딩·파싱에 실패하면 400 (`bad request`).
 	// 검증 실패(minCareer/maxCareer 음수, minCareer > maxCareer)면 400 (검증 메시지 본문).
-	EncodedQuery []byte `form:"encoded_query" json:"encoded_query"`
+	EncodedQuery EncodedQuery `form:"encoded_query" json:"encoded_query"`
 }
 
 // GetScrapJobsParams defines parameters for GetScrapJobs.
@@ -702,37 +966,11 @@ func HandlerWithOptions(si ServerInterface, options GorillaServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
-	r.HandleFunc(options.BaseURL+"/company-review/reviews", wrapper.GetCompanyReviews).Methods(http.MethodGet)
-
 	r.HandleFunc(options.BaseURL+"/job_postings", wrapper.GetJobPostings).Methods(http.MethodGet)
-
-	r.HandleFunc(options.BaseURL+"/my/match-job", wrapper.FindMatchJob).Methods(http.MethodGet)
-
-	r.HandleFunc(options.BaseURL+"/my/scrap-job", wrapper.RemoveScrapJob).Methods(http.MethodDelete)
-
-	r.HandleFunc(options.BaseURL+"/my/scrap-job", wrapper.GetScrapJobs).Methods(http.MethodGet)
-
-	r.HandleFunc(options.BaseURL+"/my/scrap-job", wrapper.AddScrapJob).Methods(http.MethodPost)
-
-	r.HandleFunc(options.BaseURL+"/my/match-job/condition", wrapper.DeleteMatchJobCondition).Methods(http.MethodDelete)
-
-	r.HandleFunc(options.BaseURL+"/my/match-job/condition", wrapper.AddMatchJobCondition).Methods(http.MethodPost)
-
-	r.HandleFunc(options.BaseURL+"/my/match-job/condition", wrapper.UpdateMatchJobCondition).Methods(http.MethodPut)
 
 	r.HandleFunc(options.BaseURL+"/job_postings/count", wrapper.CountJobPostings).Methods(http.MethodGet)
 
-	r.HandleFunc(options.BaseURL+"/my/scrap-job/untagged", wrapper.GetUntaggedScrapJobs).Methods(http.MethodGet)
-
 	r.HandleFunc(options.BaseURL+"/job_postings/{site}/{postingId}", wrapper.GetJobPostingDetail).Methods(http.MethodGet)
-
-	r.HandleFunc(options.BaseURL+"/my/match-job/agree-to-mail", wrapper.UpdateAgreeToMail).Methods(http.MethodPut)
-
-	r.HandleFunc(options.BaseURL+"/my/scrap-job/tags", wrapper.RemoveScrapTag).Methods(http.MethodDelete)
-
-	r.HandleFunc(options.BaseURL+"/my/scrap-job/tags", wrapper.GetScrapTags).Methods(http.MethodGet)
-
-	r.HandleFunc(options.BaseURL+"/my/scrap-job/tags", wrapper.AddScrapTag).Methods(http.MethodPost)
 
 	r.HandleFunc(options.BaseURL+"/categories", wrapper.GetCategories).Methods(http.MethodGet)
 
@@ -740,7 +978,48 @@ func HandlerWithOptions(si ServerInterface, options GorillaServerOptions) http.H
 
 	r.HandleFunc(options.BaseURL+"/companies", wrapper.GetCompanies).Methods(http.MethodGet)
 
+	r.HandleFunc(options.BaseURL+"/my/scrap-job", wrapper.RemoveScrapJob).Methods(http.MethodDelete)
+
+	r.HandleFunc(options.BaseURL+"/my/scrap-job", wrapper.GetScrapJobs).Methods(http.MethodGet)
+
+	r.HandleFunc(options.BaseURL+"/my/scrap-job", wrapper.AddScrapJob).Methods(http.MethodPost)
+
+	r.HandleFunc(options.BaseURL+"/my/scrap-job/untagged", wrapper.GetUntaggedScrapJobs).Methods(http.MethodGet)
+
+	r.HandleFunc(options.BaseURL+"/my/scrap-job/tags", wrapper.RemoveScrapTag).Methods(http.MethodDelete)
+
+	r.HandleFunc(options.BaseURL+"/my/scrap-job/tags", wrapper.GetScrapTags).Methods(http.MethodGet)
+
+	r.HandleFunc(options.BaseURL+"/my/scrap-job/tags", wrapper.AddScrapTag).Methods(http.MethodPost)
+
+	r.HandleFunc(options.BaseURL+"/my/match-job", wrapper.FindMatchJob).Methods(http.MethodGet)
+
+	r.HandleFunc(options.BaseURL+"/my/match-job/condition", wrapper.DeleteMatchJobCondition).Methods(http.MethodDelete)
+
+	r.HandleFunc(options.BaseURL+"/my/match-job/condition", wrapper.AddMatchJobCondition).Methods(http.MethodPost)
+
+	r.HandleFunc(options.BaseURL+"/my/match-job/condition", wrapper.UpdateMatchJobCondition).Methods(http.MethodPut)
+
+	r.HandleFunc(options.BaseURL+"/my/match-job/agree-to-mail", wrapper.UpdateAgreeToMail).Methods(http.MethodPut)
+
+	r.HandleFunc(options.BaseURL+"/company-review/reviews", wrapper.GetCompanyReviews).Methods(http.MethodGet)
+
 	return r
+}
+
+type BadRequestTextResponse string
+
+type ForbiddenResponse struct {
+}
+
+type InternalServerErrorTextResponse string
+
+type UnauthorizedTextResponse string
+
+type UnauthorizedEmptyResponse struct {
+}
+
+type UnauthorizedTokenResponse struct {
 }
 
 type GetCategoriesRequestObject struct {
@@ -774,15 +1053,14 @@ func (response GetCategories200JSONResponse) VisitGetCategoriesResponse(w http.R
 	return err
 }
 
-type GetCategories401Response struct {
-}
+type GetCategories401Response = UnauthorizedTokenResponse
 
 func (response GetCategories401Response) VisitGetCategoriesResponse(w http.ResponseWriter) error {
 	w.WriteHeader(401)
 	return nil
 }
 
-type GetCategories500TextResponse string
+type GetCategories500TextResponse InternalServerErrorTextResponse
 
 func (response GetCategories500TextResponse) VisitGetCategoriesResponse(w http.ResponseWriter) error {
 
@@ -825,7 +1103,7 @@ func (response GetCompanies200JSONResponse) VisitGetCompaniesResponse(w http.Res
 	return err
 }
 
-type GetCompanies400TextResponse string
+type GetCompanies400TextResponse BadRequestTextResponse
 
 func (response GetCompanies400TextResponse) VisitGetCompaniesResponse(w http.ResponseWriter) error {
 
@@ -836,15 +1114,14 @@ func (response GetCompanies400TextResponse) VisitGetCompaniesResponse(w http.Res
 	return err
 }
 
-type GetCompanies401Response struct {
-}
+type GetCompanies401Response = UnauthorizedTokenResponse
 
 func (response GetCompanies401Response) VisitGetCompaniesResponse(w http.ResponseWriter) error {
 	w.WriteHeader(401)
 	return nil
 }
 
-type GetCompanies500TextResponse string
+type GetCompanies500TextResponse InternalServerErrorTextResponse
 
 func (response GetCompanies500TextResponse) VisitGetCompaniesResponse(w http.ResponseWriter) error {
 
@@ -877,7 +1154,7 @@ func (response GetCompanyReviews200JSONResponse) VisitGetCompanyReviewsResponse(
 	return err
 }
 
-type GetCompanyReviews400TextResponse string
+type GetCompanyReviews400TextResponse BadRequestTextResponse
 
 func (response GetCompanyReviews400TextResponse) VisitGetCompanyReviewsResponse(w http.ResponseWriter) error {
 
@@ -888,8 +1165,7 @@ func (response GetCompanyReviews400TextResponse) VisitGetCompanyReviewsResponse(
 	return err
 }
 
-type GetCompanyReviews401Response struct {
-}
+type GetCompanyReviews401Response = UnauthorizedTokenResponse
 
 func (response GetCompanyReviews401Response) VisitGetCompanyReviewsResponse(w http.ResponseWriter) error {
 	w.WriteHeader(401)
@@ -929,7 +1205,7 @@ func (response GetJobPostings200JSONResponse) VisitGetJobPostingsResponse(w http
 	return err
 }
 
-type GetJobPostings400TextResponse string
+type GetJobPostings400TextResponse BadRequestTextResponse
 
 func (response GetJobPostings400TextResponse) VisitGetJobPostingsResponse(w http.ResponseWriter) error {
 
@@ -940,15 +1216,14 @@ func (response GetJobPostings400TextResponse) VisitGetJobPostingsResponse(w http
 	return err
 }
 
-type GetJobPostings401Response struct {
-}
+type GetJobPostings401Response = UnauthorizedTokenResponse
 
 func (response GetJobPostings401Response) VisitGetJobPostingsResponse(w http.ResponseWriter) error {
 	w.WriteHeader(401)
 	return nil
 }
 
-type GetJobPostings500TextResponse string
+type GetJobPostings500TextResponse InternalServerErrorTextResponse
 
 func (response GetJobPostings500TextResponse) VisitGetJobPostingsResponse(w http.ResponseWriter) error {
 
@@ -981,7 +1256,7 @@ func (response CountJobPostings200JSONResponse) VisitCountJobPostingsResponse(w 
 	return err
 }
 
-type CountJobPostings400TextResponse string
+type CountJobPostings400TextResponse BadRequestTextResponse
 
 func (response CountJobPostings400TextResponse) VisitCountJobPostingsResponse(w http.ResponseWriter) error {
 
@@ -992,15 +1267,14 @@ func (response CountJobPostings400TextResponse) VisitCountJobPostingsResponse(w 
 	return err
 }
 
-type CountJobPostings401Response struct {
-}
+type CountJobPostings401Response = UnauthorizedTokenResponse
 
 func (response CountJobPostings401Response) VisitCountJobPostingsResponse(w http.ResponseWriter) error {
 	w.WriteHeader(401)
 	return nil
 }
 
-type CountJobPostings500TextResponse string
+type CountJobPostings500TextResponse InternalServerErrorTextResponse
 
 func (response CountJobPostings500TextResponse) VisitCountJobPostingsResponse(w http.ResponseWriter) error {
 
@@ -1034,8 +1308,7 @@ func (response GetJobPostingDetail200JSONResponse) VisitGetJobPostingDetailRespo
 	return err
 }
 
-type GetJobPostingDetail401Response struct {
-}
+type GetJobPostingDetail401Response = UnauthorizedTokenResponse
 
 func (response GetJobPostingDetail401Response) VisitGetJobPostingDetailResponse(w http.ResponseWriter) error {
 	w.WriteHeader(401)
@@ -1053,7 +1326,7 @@ func (response GetJobPostingDetail404TextResponse) VisitGetJobPostingDetailRespo
 	return err
 }
 
-type GetJobPostingDetail500TextResponse string
+type GetJobPostingDetail500TextResponse InternalServerErrorTextResponse
 
 func (response GetJobPostingDetail500TextResponse) VisitGetJobPostingDetailResponse(w http.ResponseWriter) error {
 
@@ -1085,23 +1358,21 @@ func (response FindMatchJob200JSONResponse) VisitFindMatchJobResponse(w http.Res
 	return err
 }
 
-type FindMatchJob401Response struct {
-}
+type FindMatchJob401Response = UnauthorizedEmptyResponse
 
 func (response FindMatchJob401Response) VisitFindMatchJobResponse(w http.ResponseWriter) error {
 	w.WriteHeader(401)
 	return nil
 }
 
-type FindMatchJob403Response struct {
-}
+type FindMatchJob403Response = ForbiddenResponse
 
 func (response FindMatchJob403Response) VisitFindMatchJobResponse(w http.ResponseWriter) error {
 	w.WriteHeader(403)
 	return nil
 }
 
-type FindMatchJob500TextResponse string
+type FindMatchJob500TextResponse InternalServerErrorTextResponse
 
 func (response FindMatchJob500TextResponse) VisitFindMatchJobResponse(w http.ResponseWriter) error {
 
@@ -1134,23 +1405,21 @@ func (response UpdateAgreeToMail200JSONResponse) VisitUpdateAgreeToMailResponse(
 	return err
 }
 
-type UpdateAgreeToMail401Response struct {
-}
+type UpdateAgreeToMail401Response = UnauthorizedEmptyResponse
 
 func (response UpdateAgreeToMail401Response) VisitUpdateAgreeToMailResponse(w http.ResponseWriter) error {
 	w.WriteHeader(401)
 	return nil
 }
 
-type UpdateAgreeToMail403Response struct {
-}
+type UpdateAgreeToMail403Response = ForbiddenResponse
 
 func (response UpdateAgreeToMail403Response) VisitUpdateAgreeToMailResponse(w http.ResponseWriter) error {
 	w.WriteHeader(403)
 	return nil
 }
 
-type UpdateAgreeToMail500TextResponse string
+type UpdateAgreeToMail500TextResponse InternalServerErrorTextResponse
 
 func (response UpdateAgreeToMail500TextResponse) VisitUpdateAgreeToMailResponse(w http.ResponseWriter) error {
 
@@ -1183,23 +1452,21 @@ func (response DeleteMatchJobCondition200JSONResponse) VisitDeleteMatchJobCondit
 	return err
 }
 
-type DeleteMatchJobCondition401Response struct {
-}
+type DeleteMatchJobCondition401Response = UnauthorizedEmptyResponse
 
 func (response DeleteMatchJobCondition401Response) VisitDeleteMatchJobConditionResponse(w http.ResponseWriter) error {
 	w.WriteHeader(401)
 	return nil
 }
 
-type DeleteMatchJobCondition403Response struct {
-}
+type DeleteMatchJobCondition403Response = ForbiddenResponse
 
 func (response DeleteMatchJobCondition403Response) VisitDeleteMatchJobConditionResponse(w http.ResponseWriter) error {
 	w.WriteHeader(403)
 	return nil
 }
 
-type DeleteMatchJobCondition500TextResponse string
+type DeleteMatchJobCondition500TextResponse InternalServerErrorTextResponse
 
 func (response DeleteMatchJobCondition500TextResponse) VisitDeleteMatchJobConditionResponse(w http.ResponseWriter) error {
 
@@ -1232,23 +1499,21 @@ func (response AddMatchJobCondition200JSONResponse) VisitAddMatchJobConditionRes
 	return err
 }
 
-type AddMatchJobCondition401Response struct {
-}
+type AddMatchJobCondition401Response = UnauthorizedEmptyResponse
 
 func (response AddMatchJobCondition401Response) VisitAddMatchJobConditionResponse(w http.ResponseWriter) error {
 	w.WriteHeader(401)
 	return nil
 }
 
-type AddMatchJobCondition403Response struct {
-}
+type AddMatchJobCondition403Response = ForbiddenResponse
 
 func (response AddMatchJobCondition403Response) VisitAddMatchJobConditionResponse(w http.ResponseWriter) error {
 	w.WriteHeader(403)
 	return nil
 }
 
-type AddMatchJobCondition500TextResponse string
+type AddMatchJobCondition500TextResponse InternalServerErrorTextResponse
 
 func (response AddMatchJobCondition500TextResponse) VisitAddMatchJobConditionResponse(w http.ResponseWriter) error {
 
@@ -1281,23 +1546,21 @@ func (response UpdateMatchJobCondition200JSONResponse) VisitUpdateMatchJobCondit
 	return err
 }
 
-type UpdateMatchJobCondition401Response struct {
-}
+type UpdateMatchJobCondition401Response = UnauthorizedEmptyResponse
 
 func (response UpdateMatchJobCondition401Response) VisitUpdateMatchJobConditionResponse(w http.ResponseWriter) error {
 	w.WriteHeader(401)
 	return nil
 }
 
-type UpdateMatchJobCondition403Response struct {
-}
+type UpdateMatchJobCondition403Response = ForbiddenResponse
 
 func (response UpdateMatchJobCondition403Response) VisitUpdateMatchJobConditionResponse(w http.ResponseWriter) error {
 	w.WriteHeader(403)
 	return nil
 }
 
-type UpdateMatchJobCondition500TextResponse string
+type UpdateMatchJobCondition500TextResponse InternalServerErrorTextResponse
 
 func (response UpdateMatchJobCondition500TextResponse) VisitUpdateMatchJobConditionResponse(w http.ResponseWriter) error {
 
@@ -1324,7 +1587,7 @@ func (response RemoveScrapJob200Response) VisitRemoveScrapJobResponse(w http.Res
 	return nil
 }
 
-type RemoveScrapJob401TextResponse string
+type RemoveScrapJob401TextResponse UnauthorizedTextResponse
 
 func (response RemoveScrapJob401TextResponse) VisitRemoveScrapJobResponse(w http.ResponseWriter) error {
 
@@ -1346,7 +1609,7 @@ func (response RemoveScrapJob404TextResponse) VisitRemoveScrapJobResponse(w http
 	return err
 }
 
-type RemoveScrapJob500TextResponse string
+type RemoveScrapJob500TextResponse InternalServerErrorTextResponse
 
 func (response RemoveScrapJob500TextResponse) VisitRemoveScrapJobResponse(w http.ResponseWriter) error {
 
@@ -1379,7 +1642,7 @@ func (response GetScrapJobs200JSONResponse) VisitGetScrapJobsResponse(w http.Res
 	return err
 }
 
-type GetScrapJobs401TextResponse string
+type GetScrapJobs401TextResponse UnauthorizedTextResponse
 
 func (response GetScrapJobs401TextResponse) VisitGetScrapJobsResponse(w http.ResponseWriter) error {
 
@@ -1390,7 +1653,7 @@ func (response GetScrapJobs401TextResponse) VisitGetScrapJobsResponse(w http.Res
 	return err
 }
 
-type GetScrapJobs500TextResponse string
+type GetScrapJobs500TextResponse InternalServerErrorTextResponse
 
 func (response GetScrapJobs500TextResponse) VisitGetScrapJobsResponse(w http.ResponseWriter) error {
 
@@ -1417,7 +1680,7 @@ func (response AddScrapJob201Response) VisitAddScrapJobResponse(w http.ResponseW
 	return nil
 }
 
-type AddScrapJob401TextResponse string
+type AddScrapJob401TextResponse UnauthorizedTextResponse
 
 func (response AddScrapJob401TextResponse) VisitAddScrapJobResponse(w http.ResponseWriter) error {
 
@@ -1428,7 +1691,7 @@ func (response AddScrapJob401TextResponse) VisitAddScrapJobResponse(w http.Respo
 	return err
 }
 
-type AddScrapJob500TextResponse string
+type AddScrapJob500TextResponse InternalServerErrorTextResponse
 
 func (response AddScrapJob500TextResponse) VisitAddScrapJobResponse(w http.ResponseWriter) error {
 
@@ -1455,7 +1718,7 @@ func (response RemoveScrapTag200Response) VisitRemoveScrapTagResponse(w http.Res
 	return nil
 }
 
-type RemoveScrapTag401TextResponse string
+type RemoveScrapTag401TextResponse UnauthorizedTextResponse
 
 func (response RemoveScrapTag401TextResponse) VisitRemoveScrapTagResponse(w http.ResponseWriter) error {
 
@@ -1477,7 +1740,7 @@ func (response RemoveScrapTag404TextResponse) VisitRemoveScrapTagResponse(w http
 	return err
 }
 
-type RemoveScrapTag500TextResponse string
+type RemoveScrapTag500TextResponse InternalServerErrorTextResponse
 
 func (response RemoveScrapTag500TextResponse) VisitRemoveScrapTagResponse(w http.ResponseWriter) error {
 
@@ -1509,7 +1772,7 @@ func (response GetScrapTags200JSONResponse) VisitGetScrapTagsResponse(w http.Res
 	return err
 }
 
-type GetScrapTags401TextResponse string
+type GetScrapTags401TextResponse UnauthorizedTextResponse
 
 func (response GetScrapTags401TextResponse) VisitGetScrapTagsResponse(w http.ResponseWriter) error {
 
@@ -1520,7 +1783,7 @@ func (response GetScrapTags401TextResponse) VisitGetScrapTagsResponse(w http.Res
 	return err
 }
 
-type GetScrapTags500TextResponse string
+type GetScrapTags500TextResponse InternalServerErrorTextResponse
 
 func (response GetScrapTags500TextResponse) VisitGetScrapTagsResponse(w http.ResponseWriter) error {
 
@@ -1547,7 +1810,7 @@ func (response AddScrapTag200Response) VisitAddScrapTagResponse(w http.ResponseW
 	return nil
 }
 
-type AddScrapTag401TextResponse string
+type AddScrapTag401TextResponse UnauthorizedTextResponse
 
 func (response AddScrapTag401TextResponse) VisitAddScrapTagResponse(w http.ResponseWriter) error {
 
@@ -1569,7 +1832,7 @@ func (response AddScrapTag404TextResponse) VisitAddScrapTagResponse(w http.Respo
 	return err
 }
 
-type AddScrapTag500TextResponse string
+type AddScrapTag500TextResponse InternalServerErrorTextResponse
 
 func (response AddScrapTag500TextResponse) VisitAddScrapTagResponse(w http.ResponseWriter) error {
 
@@ -1601,7 +1864,7 @@ func (response GetUntaggedScrapJobs200JSONResponse) VisitGetUntaggedScrapJobsRes
 	return err
 }
 
-type GetUntaggedScrapJobs401TextResponse string
+type GetUntaggedScrapJobs401TextResponse UnauthorizedTextResponse
 
 func (response GetUntaggedScrapJobs401TextResponse) VisitGetUntaggedScrapJobsResponse(w http.ResponseWriter) error {
 
@@ -1612,7 +1875,7 @@ func (response GetUntaggedScrapJobs401TextResponse) VisitGetUntaggedScrapJobsRes
 	return err
 }
 
-type GetUntaggedScrapJobs500TextResponse string
+type GetUntaggedScrapJobs500TextResponse InternalServerErrorTextResponse
 
 func (response GetUntaggedScrapJobs500TextResponse) VisitGetUntaggedScrapJobsResponse(w http.ResponseWriter) error {
 
@@ -1654,15 +1917,14 @@ func (response GetSkills200JSONResponse) VisitGetSkillsResponse(w http.ResponseW
 	return err
 }
 
-type GetSkills401Response struct {
-}
+type GetSkills401Response = UnauthorizedTokenResponse
 
 func (response GetSkills401Response) VisitGetSkillsResponse(w http.ResponseWriter) error {
 	w.WriteHeader(401)
 	return nil
 }
 
-type GetSkills500TextResponse string
+type GetSkills500TextResponse InternalServerErrorTextResponse
 
 func (response GetSkills500TextResponse) VisitGetSkillsResponse(w http.ResponseWriter) error {
 
