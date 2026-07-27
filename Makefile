@@ -46,6 +46,10 @@ proto:
 	@protoc careerhub/apicomposer/userinfo/restapi_grpc/*.proto  --go_out=. --go-grpc_out=. --go-grpc_opt=paths=source_relative  --go_opt=paths=source_relative  --proto_path=.
 	@protoc careerhub/apicomposer/review/restapi_grpc/*.proto  --go_out=. --go-grpc_out=. --go-grpc_opt=paths=source_relative  --go_opt=paths=source_relative  --proto_path=.
 
+## openapi: regenerates Go models & server interfaces from the OpenAPI spec
+openapi:
+	@cd careerhub/apicomposer/api && go tool oapi-codegen --config oapi-codegen.yaml openapi.yaml
+
 ## test: runs all tests
 test:	
 	@echo "Testing..."

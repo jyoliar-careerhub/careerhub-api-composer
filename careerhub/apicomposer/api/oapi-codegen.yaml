@@ -1,0 +1,8 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oapi-codegen/oapi-codegen/v2.8.0/configuration-schema.json
+# 재생성: make openapi (openapi.yaml → api.gen.go)
+package: api
+generate:
+  models: true
+  gorilla-server: true
+  strict-server: true
+output: api.gen.go
