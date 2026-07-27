@@ -11,9 +11,17 @@ REST 계약의 명세는 **`careerhub/apicomposer/api/`** 에 있다 (ADR-0018: 
 | `scrapjob.yaml` | 스크랩 관리 7개 (`controller/scrapJob_controller.go`) |
 | `matchjob.yaml` | 매칭 조건 5개 (`controller/matchJob_controller.go`) |
 | `review.yaml` | 회사 리뷰 1개 (`controller/review_controller.go`) |
-| `components.yaml` | 공유 스키마(데이터 모델)의 단일 정의처 |
 
-- **생성물**: 같은 디렉터리의 `models.gen.go`(공유 스키마 모델) + `api.gen.go`(gorilla/mux 서버·strict 인터페이스). proto 패턴(`.proto` 옆 `.pb.go` 커밋)과 같이 명세와 나란히 커밋한다.
+데이터 모델 스키마는 코드의 도메인 경계(`common/domain/`·`common/query/`)대로 **`schemas/`** 아래에 나뉘어 있고, 경로 절편이 파일 간 `$ref`로 참조한다:
+
+| 파일 | 대응 코드 |
+|---|---|
+| `schemas/jobposting.yaml` | `common/domain/jobposting.go` + posting proto 응답 타입 |
+| `schemas/review.yaml` | `common/domain/review.go` |
+| `schemas/userinfo.yaml` | `common/domain/userinfo.go` + userinfo dto·proto 타입 |
+| `schemas/query.yaml` | `common/query/` |
+
+- **생성물**: 도메인별 `models-*.gen.go`(스키마 모델) + `api.gen.go`(gorilla/mux 서버·strict 인터페이스). proto 패턴(`.proto` 옆 `.pb.go` 커밋)과 같이 명세와 나란히 커밋한다.
 - **재생성**: 명세를 수정했다면 아래 한 번으로 생성물을 갱신한다.
 
   ```bash

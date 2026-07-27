@@ -15,7 +15,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: './components.yaml#/components/schemas/MatchJob'
+                $ref: './schemas/userinfo.yaml#/components/schemas/MatchJob'
         '401':
           description: 로그인 필요 (본문 없음)
         '403':
@@ -42,14 +42,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: './components.yaml#/components/schemas/AddConditionRequest'
+              $ref: './schemas/userinfo.yaml#/components/schemas/AddConditionRequest'
       responses:
         '200':
           description: 처리 결과
           content:
             application/json:
               schema:
-                $ref: './components.yaml#/components/schemas/IsSuccessResponse'
+                $ref: './schemas/userinfo.yaml#/components/schemas/IsSuccessResponse'
         '401':
           description: 로그인 필요 (본문 없음)
         '403':
@@ -72,14 +72,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: './components.yaml#/components/schemas/UpdateConditionRequest'
+              $ref: './schemas/userinfo.yaml#/components/schemas/UpdateConditionRequest'
       responses:
         '200':
           description: 처리 결과
           content:
             application/json:
               schema:
-                $ref: './components.yaml#/components/schemas/IsSuccessResponse'
+                $ref: './schemas/userinfo.yaml#/components/schemas/IsSuccessResponse'
         '401':
           description: 로그인 필요 (본문 없음)
         '403':
@@ -102,14 +102,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: './components.yaml#/components/schemas/DeleteConditionRequest'
+              $ref: './schemas/userinfo.yaml#/components/schemas/DeleteConditionRequest'
       responses:
         '200':
           description: 처리 결과
           content:
             application/json:
               schema:
-                $ref: './components.yaml#/components/schemas/IsSuccessResponse'
+                $ref: './schemas/userinfo.yaml#/components/schemas/IsSuccessResponse'
         '401':
           description: 로그인 필요 (본문 없음)
         '403':
@@ -134,14 +134,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: './components.yaml#/components/schemas/UpdateAgreeToMailRequest'
+              $ref: './schemas/userinfo.yaml#/components/schemas/UpdateAgreeToMailRequest'
       responses:
         '200':
           description: 처리 결과
           content:
             application/json:
               schema:
-                $ref: './components.yaml#/components/schemas/IsSuccessResponse'
+                $ref: './schemas/userinfo.yaml#/components/schemas/IsSuccessResponse'
         '401':
           description: 로그인 필요 (본문 없음)
         '403':

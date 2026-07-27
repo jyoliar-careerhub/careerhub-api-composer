@@ -47,7 +47,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: './components.yaml#/components/schemas/JobPosting'
+                  $ref: './schemas/jobposting.yaml#/components/schemas/JobPosting'
         '400':
           description: 요청 파라미터 불량 (본문은 오류 메시지)
           content:
@@ -88,7 +88,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: './components.yaml#/components/schemas/CountResponse'
+                $ref: './schemas/jobposting.yaml#/components/schemas/CountResponse'
         '400':
           description: 요청 파라미터 불량 (본문은 오류 메시지)
           content:
@@ -134,7 +134,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: './components.yaml#/components/schemas/JobPostingDetail'
+                $ref: './schemas/jobposting.yaml#/components/schemas/JobPostingDetail'
         '401':
           description: Authorization 헤더가 존재하나 토큰이 무효(만료 등) (본문 없음)
         '404':
@@ -169,7 +169,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: './components.yaml#/components/schemas/CategoriesResponse'
+                $ref: './schemas/jobposting.yaml#/components/schemas/CategoriesResponse'
         '401':
           description: Authorization 헤더가 존재하나 토큰이 무효(만료 등) (본문 없음)
         '500':
@@ -198,7 +198,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: './components.yaml#/components/schemas/SkillsResponse'
+                $ref: './schemas/jobposting.yaml#/components/schemas/SkillsResponse'
         '401':
           description: Authorization 헤더가 존재하나 토큰이 무효(만료 등) (본문 없음)
         '500':
@@ -234,7 +234,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: './components.yaml#/components/schemas/CompaniesResponse'
+                $ref: './schemas/jobposting.yaml#/components/schemas/CompaniesResponse'
         '400':
           description: 요청 파라미터 불량 (본문은 오류 메시지)
           content:

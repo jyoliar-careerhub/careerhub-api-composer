@@ -40,7 +40,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: './components.yaml#/components/schemas/Review'
+                  $ref: './schemas/review.yaml#/components/schemas/Review'
         '400':
           description: 요청 파라미터 불량 (본문은 오류 메시지)
           content:

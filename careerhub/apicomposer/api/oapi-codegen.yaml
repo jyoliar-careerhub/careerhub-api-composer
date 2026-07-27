@@ -1,13 +1,16 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/oapi-codegen/oapi-codegen/v2.8.0/configuration-schema.json
 # 서버 생성 설정 — 입력은 루트 명세(openapi.yaml). 재생성: make openapi
-# 모델은 공유 컴포넌트(components.yaml)에서 별도 생성된다(oapi-codegen-models.yaml → models.gen.go).
+# 도메인 스키마 모델은 schemas/*.yaml에서 별도 생성된다(schemas/*.codegen.yaml → models-*.gen.go).
 package: api
 generate:
-  models: true # 여기서의 모델은 경로 절편의 인라인 타입(요청 파라미터 등)뿐이다 — 공유 스키마는 models.gen.go
+  models: true # 여기서의 모델은 경로 절편의 인라인 타입(요청 파라미터 등)뿐이다 — 도메인 스키마는 models-*.gen.go
   gorilla-server: true
   strict-server: true
 output: api.gen.go
-# 경로 절편이 './components.yaml#/...'로 참조하는 타입은 models.gen.go에 이미 있다.
+# 경로 절편이 './schemas/<domain>.yaml#/...'로 참조하는 타입은 models-<domain>.gen.go에 이미 있다.
 # '-'는 "같은 패키지" 매핑 — import 없이 그 타입을 그대로 쓴다.
 import-mapping:
-  ./components.yaml: '-'
+  ./schemas/jobposting.yaml: '-'
+  ./schemas/review.yaml: '-'
+  ./schemas/userinfo.yaml: '-'
+  ./schemas/query.yaml: '-'

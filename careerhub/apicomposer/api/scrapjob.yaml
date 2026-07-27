@@ -26,7 +26,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: './components.yaml#/components/schemas/JobPosting'
+                  $ref: './schemas/jobposting.yaml#/components/schemas/JobPosting'
         '401':
           description: 로그인 필요 (`Unauthorized`)
           content:
@@ -50,7 +50,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: './components.yaml#/components/schemas/ScrapJobTarget'
+              $ref: './schemas/userinfo.yaml#/components/schemas/ScrapJobTarget'
       responses:
         '201':
           description: 스크랩 추가됨 (본문 없음)
@@ -77,7 +77,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: './components.yaml#/components/schemas/ScrapJobTarget'
+              $ref: './schemas/userinfo.yaml#/components/schemas/ScrapJobTarget'
       responses:
         '200':
           description: 스크랩 제거됨 (본문 없음)
@@ -117,7 +117,7 @@ paths:
                 type: array
                 nullable: true
                 items:
-                  $ref: './components.yaml#/components/schemas/ScrapJob'
+                  $ref: './schemas/userinfo.yaml#/components/schemas/ScrapJob'
         '401':
           description: 로그인 필요 (`Unauthorized`)
           content:
@@ -144,7 +144,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: './components.yaml#/components/schemas/ScrapTagsResponse'
+                $ref: './schemas/userinfo.yaml#/components/schemas/ScrapTagsResponse'
         '401':
           description: 로그인 필요 (`Unauthorized`)
           content:
@@ -168,7 +168,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: './components.yaml#/components/schemas/ScrapTagTarget'
+              $ref: './schemas/userinfo.yaml#/components/schemas/ScrapTagTarget'
       responses:
         '200':
           description: 태그 추가됨 (본문 없음)
@@ -201,7 +201,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: './components.yaml#/components/schemas/ScrapTagTarget'
+              $ref: './schemas/userinfo.yaml#/components/schemas/ScrapTagTarget'
       responses:
         '200':
           description: 태그 제거됨 (본문 없음)
