@@ -48,6 +48,7 @@ proto:
 
 ## openapi: regenerates Go models & server interfaces from the OpenAPI spec
 openapi:
+	@cd careerhub/apicomposer/api && go tool oapi-codegen --config oapi-codegen-models.yaml components.yaml
 	@cd careerhub/apicomposer/api && go tool oapi-codegen --config oapi-codegen.yaml openapi.yaml
 
 ## test: runs all tests

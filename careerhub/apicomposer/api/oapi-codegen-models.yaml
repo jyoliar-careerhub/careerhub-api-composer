@@ -1,0 +1,9 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oapi-codegen/oapi-codegen/v2.8.0/configuration-schema.json
+# 모델 생성 설정 — 입력은 공유 컴포넌트(components.yaml). 재생성: make openapi
+package: api
+generate:
+  models: true
+output: models.gen.go
+output-options:
+  # 이 파일은 paths가 없어 전 컴포넌트가 "미사용"으로 보인다 — 프루닝을 끈다
+  skip-prune: true

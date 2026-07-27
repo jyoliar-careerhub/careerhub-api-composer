@@ -1,0 +1,497 @@
+# 공유 스키마 — 경로 절편들이 공용하는 데이터 모델의 단일 정의처.
+# 모델 생성(models.gen.go)의 입력이다: make openapi 참고. 단독 API 문서가 아니다.
+# (파라미터·에러 응답은 각 절편에 인라인한다 — 참조될 때만 타입이 생성되는 도구 제약.)
+openapi: 3.0.3
+info:
+  title: CareerHub API Composer — shared components
+  version: 0.1.0
+paths: {}
+components:
+  schemas:
+    JobPostingStatus:
+      type: string
+      description: 공고 상태. 원천(careerhub-posting-service)의 전체 값 목록이다.
+      enum:
+        - hiring
+        - closed
+
+    JobPosting:
+      type: object
+      description: 채용공고 목록 항목
+      required:
+        - site
+        - postingId
+        - title
+        - companyName
+        - skills
+        - categories
+        - imageUrl
+        - addresses
+        - minCareer
+        - maxCareer
+        - status
+        - scrapInfo
+      properties:
+        site:
+          type: string
+        postingId:
+          type: string
+        title:
+          type: string
+        companyName:
+          type: string
+        skills:
+          type: array
+          nullable: true
+          items:
+            type: string
+        categories:
+          type: array
+          nullable: true
+          items:
+            type: string
+        imageUrl:
+          type: string
+          nullable: true
+        addresses:
+          type: array
+          nullable: true
+          items:
+            type: string
+        minCareer:
+          type: integer
+          format: int32
+          nullable: true
+        maxCareer:
+          type: integer
+          format: int32
+          nullable: true
+        status:
+          $ref: '#/components/schemas/JobPostingStatus'
+        scrapInfo:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ScrapInfo'
+          description: 비로그인 요청이거나 스크랩 정보 로딩에 실패하면 null
+        reviewInfo:
+          $ref: '#/components/schemas/ReviewInfo'
+
+    JobPostingDetail:
+      type: object
+      description: 채용공고 상세
+      required:
+        - site
+        - postingId
+        - title
+        - skills
+        - intro
+        - mainTask
+        - qualifications
+        - preferred
+        - benefits
+        - recruitProcess
+        - careerMin
+        - careerMax
+        - addresses
+        - companyId
+        - companyName
+        - companyImages
+        - tags
+        - status
+        - postUrl
+        - companyUrl
+        - companyLogo
+        - scrapInfo
+      properties:
+        site:
+          type: string
+        postingId:
+          type: string
+        title:
+          type: string
+        skills:
+          type: array
+          nullable: true
+          items:
+            type: string
+        intro:
+          type: string
+        mainTask:
+          type: string
+        qualifications:
+          type: string
+        preferred:
+          type: string
+        benefits:
+          type: string
+        recruitProcess:
+          type: string
+          nullable: true
+        careerMin:
+          type: integer
+          format: int32
+          nullable: true
+        careerMax:
+          type: integer
+          format: int32
+          nullable: true
+        addresses:
+          type: array
+          nullable: true
+          items:
+            type: string
+        companyId:
+          type: string
+        companyName:
+          type: string
+        companyImages:
+          type: array
+          nullable: true
+          items:
+            type: string
+        tags:
+          type: array
+          nullable: true
+          items:
+            type: string
+        status:
+          $ref: '#/components/schemas/JobPostingStatus'
+        postUrl:
+          type: string
+        companyUrl:
+          type: string
+          nullable: true
+        companyLogo:
+          type: string
+        scrapInfo:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ScrapInfo'
+          description: 비로그인 요청이거나 스크랩 정보 로딩에 실패하면 null
+        reviewInfo:
+          $ref: '#/components/schemas/ReviewInfo'
+        firstPageReviews:
+          type: array
+          description: 회사 리뷰 첫 페이지 (리뷰 데이터가 없으면 필드 생략)
+          items:
+            $ref: '#/components/schemas/Review'
+
+    ScrapInfo:
+      type: object
+      required:
+        - isScrapped
+        - tags
+      properties:
+        isScrapped:
+          type: boolean
+        tags:
+          type: array
+          items:
+            type: string
+
+    ReviewInfo:
+      type: object
+      description: 회사 리뷰 요약. 리뷰 데이터가 없으면 상위 객체에서 필드 자체가 생략된다.
+      required:
+        - score
+        - reviewCount
+        - defaultName
+        - isCompleteCrawl
+      properties:
+        score:
+          type: integer
+          format: int32
+        reviewCount:
+          type: integer
+          format: int32
+        defaultName:
+          type: string
+        isCompleteCrawl:
+          type: boolean
+
+    Review:
+      type: object
+      required:
+        - score
+        - summary
+        - employmentStatus
+        - reviewUserId
+        - jobType
+        - date
+      properties:
+        score:
+          type: integer
+          format: int32
+        summary:
+          type: string
+        employmentStatus:
+          type: boolean
+          description: 리뷰 작성 시점의 재직 여부
+        reviewUserId:
+          type: string
+        jobType:
+          type: string
+        date:
+          type: string
+          format: date-time
+
+    CountResponse:
+      type: object
+      required:
+        - count
+      properties:
+        count:
+          type: integer
+          format: int64
+
+    Query:
+      type: object
+      description: |
+        채용공고 검색 조건. `encoded_query` 파라미터(base64 JSON)와
+        매칭 조건(Condition)의 query 필드에 쓰인다.
+      properties:
+        categories:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/CategoryQuery'
+        skillNames:
+          type: array
+          nullable: true
+          description: 바깥 배열은 AND, 안쪽 배열은 OR 조건
+          items:
+            type: array
+            items:
+              type: string
+        minCareer:
+          type: integer
+          format: int32
+          nullable: true
+        maxCareer:
+          type: integer
+          format: int32
+          nullable: true
+        companies:
+          type: array
+          nullable: true
+          description: 매칭 조건(match-job) 응답에서는 항상 null이다
+          items:
+            $ref: '#/components/schemas/SiteCompanyQuery'
+
+    CategoryQuery:
+      type: object
+      required:
+        - site
+        - categoryName
+      properties:
+        site:
+          type: string
+        categoryName:
+          type: string
+
+    SiteCompanyQuery:
+      type: object
+      required:
+        - site
+        - companyName
+      properties:
+        site:
+          type: string
+        companyName:
+          type: string
+
+    CategoriesResponse:
+      type: object
+      description: proto 생성 타입 직렬화 — 빈 값 필드는 생략된다(omitempty)
+      properties:
+        categoriesBySite:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryRes'
+
+    CategoryRes:
+      type: object
+      properties:
+        site:
+          type: string
+        categories:
+          type: array
+          items:
+            type: string
+
+    SkillsResponse:
+      type: object
+      description: proto 생성 타입 직렬화 — 빈 값 필드는 생략된다(omitempty)
+      properties:
+        skills:
+          type: array
+          items:
+            $ref: '#/components/schemas/SkillRes'
+
+    SkillRes:
+      type: object
+      properties:
+        defaultName:
+          type: string
+        skillNames:
+          type: array
+          items:
+            type: string
+
+    CompaniesResponse:
+      type: object
+      description: proto 생성 타입 직렬화 — 빈 값 필드는 생략된다(omitempty)
+      properties:
+        companies:
+          type: array
+          items:
+            $ref: '#/components/schemas/CompanyRes'
+
+    CompanyRes:
+      type: object
+      properties:
+        defaultName:
+          type: string
+        siteCompanies:
+          type: array
+          items:
+            $ref: '#/components/schemas/SiteCompanyRes'
+
+    SiteCompanyRes:
+      type: object
+      properties:
+        site:
+          type: string
+        companyId:
+          type: string
+        companyName:
+          type: string
+
+    ScrapJob:
+      type: object
+      description: proto 생성 타입 직렬화 — 빈 값 필드는 생략된다(omitempty)
+      properties:
+        site:
+          type: string
+        postingId:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    ScrapTagsResponse:
+      type: object
+      description: proto 생성 타입 직렬화 — 태그가 없으면 tags 필드가 생략된다(omitempty)
+      properties:
+        tags:
+          type: array
+          items:
+            type: string
+
+    ScrapJobTarget:
+      type: object
+      description: |
+        스크랩 추가·제거 대상. 요청 본문의 userId 필드는 무시되고
+        인증 토큰의 userId로 덮어써진다.
+      required:
+        - site
+        - postingId
+      properties:
+        site:
+          type: string
+        postingId:
+          type: string
+
+    ScrapTagTarget:
+      type: object
+      description: |
+        태그 추가·제거 대상. 요청 본문의 userId 필드는 무시되고
+        인증 토큰의 userId로 덮어써진다.
+      required:
+        - site
+        - postingId
+        - tag
+      properties:
+        site:
+          type: string
+        postingId:
+          type: string
+        tag:
+          type: string
+
+    MatchJob:
+      type: object
+      required:
+        - conditions
+        - agreeToMail
+      properties:
+        conditions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Condition'
+        agreeToMail:
+          type: boolean
+
+    Condition:
+      type: object
+      required:
+        - conditionId
+        - conditionName
+        - query
+      properties:
+        conditionId:
+          type: string
+        conditionName:
+          type: string
+        query:
+          $ref: '#/components/schemas/Query'
+
+    AddConditionRequest:
+      type: object
+      required:
+        - conditionName
+        - query
+      properties:
+        conditionName:
+          type: string
+        query:
+          $ref: '#/components/schemas/Query'
+
+    UpdateConditionRequest:
+      type: object
+      required:
+        - conditionId
+        - conditionName
+        - query
+      properties:
+        conditionId:
+          type: string
+        conditionName:
+          type: string
+        query:
+          $ref: '#/components/schemas/Query'
+
+    DeleteConditionRequest:
+      type: object
+      required:
+        - conditionId
+      properties:
+        conditionId:
+          type: string
+
+    UpdateAgreeToMailRequest:
+      type: object
+      required:
+        - agreeToMail
+      properties:
+        agreeToMail:
+          type: boolean
+
+    IsSuccessResponse:
+      type: object
+      required:
+        - isSuccess
+      properties:
+        isSuccess:
+          type: boolean
