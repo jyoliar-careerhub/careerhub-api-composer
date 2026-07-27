@@ -2,7 +2,8 @@ BINARY_NAME=myapp
 CODE_DIR=./careerhub/apicomposer
 CONTAINER_IMAGE_NAME=careerhub-api-composer
 
-include test.env
+# test.env는 로컬 전용(untracked)이라 없을 수 있다 — 없으면 조용히 건너뛴다 (run/test 외 타겟이 죽지 않도록)
+-include test.env
 
 ## build: Build binary
 build:
@@ -44,6 +45,10 @@ proto:
 	@protoc careerhub/apicomposer/posting/restapi_grpc/*.proto  --go_out=. --go-grpc_out=. --go-grpc_opt=paths=source_relative  --go_opt=paths=source_relative  --proto_path=.
 	@protoc careerhub/apicomposer/userinfo/restapi_grpc/*.proto  --go_out=. --go-grpc_out=. --go-grpc_opt=paths=source_relative  --go_opt=paths=source_relative  --proto_path=.
 	@protoc careerhub/apicomposer/review/restapi_grpc/*.proto  --go_out=. --go-grpc_out=. --go-grpc_opt=paths=source_relative  --go_opt=paths=source_relative  --proto_path=.
+
+## openapi: regenerates Go models & server interfaces from the OpenAPI spec
+openapi:
+	@cd careerhub/apicomposer/api && go tool oapi-codegen --config oapi-codegen.yaml openapi.yaml
 
 ## test: runs all tests
 test:	

@@ -1,0 +1,31 @@
+name: OpenAPI freshness
+
+# 명세(openapi.yaml)와 생성물(api.gen.go)의 불일치를 거부하는 게이트.
+# 재생성 후 diff가 나면 실패한다 — 로컬에서 `make openapi`를 돌려 커밋할 것.
+on:
+  pull_request:
+  push:
+    branches:
+      - prod
+      - dev
+
+jobs:
+  freshness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Regenerate from spec
+        run: make openapi
+
+      - name: Fail on drift between spec and generated code
+        run: |
+          git diff --exit-code -- careerhub/apicomposer/api/ \
+            || { echo "::error::openapi.yaml과 api.gen.go가 어긋났습니다. 'make openapi' 실행 후 결과를 커밋하세요."; exit 1; }
+
+      - name: Build
+        run: go build ./...
