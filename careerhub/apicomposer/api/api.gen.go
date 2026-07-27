@@ -91,6 +91,13 @@ type DeleteConditionRequest struct {
 	ConditionId string `json:"conditionId"`
 }
 
+// ErrorResponse 구조화 에러 응답 — strict 전환된 엔드포인트의 에러 계약.
+// 미전환 엔드포인트는 아직 text/plain(`http.Error`)을 반환한다(전환 시 이 스키마로 수렴).
+type ErrorResponse struct {
+	// Message 사람이 읽을 수 있는 오류 설명
+	Message string `json:"message"`
+}
+
 // IsSuccessResponse defines model for IsSuccessResponse.
 type IsSuccessResponse struct {
 	IsSuccess bool `json:"isSuccess"`
@@ -1154,14 +1161,17 @@ func (response GetCompanyReviews200JSONResponse) VisitGetCompanyReviewsResponse(
 	return err
 }
 
-type GetCompanyReviews400TextResponse BadRequestTextResponse
+type GetCompanyReviews400JSONResponse ErrorResponse
 
-func (response GetCompanyReviews400TextResponse) VisitGetCompanyReviewsResponse(w http.ResponseWriter) error {
+func (response GetCompanyReviews400JSONResponse) VisitGetCompanyReviewsResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 
@@ -1172,14 +1182,17 @@ func (response GetCompanyReviews401Response) VisitGetCompanyReviewsResponse(w ht
 	return nil
 }
 
-type GetCompanyReviews500TextResponse string
+type GetCompanyReviews500JSONResponse ErrorResponse
 
-func (response GetCompanyReviews500TextResponse) VisitGetCompanyReviewsResponse(w http.ResponseWriter) error {
+func (response GetCompanyReviews500JSONResponse) VisitGetCompanyReviewsResponse(w http.ResponseWriter) error {
 
-	w.Header().Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
-
-	_, err := w.Write([]byte(fmt.Sprint(response)))
+	_, err := buf.WriteTo(w)
 	return err
 }
 

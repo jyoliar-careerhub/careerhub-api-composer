@@ -551,16 +551,19 @@ paths:
                 items:
                   $ref: '#/components/schemas/Review'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: 요청 파라미터 불량
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           $ref: '#/components/responses/UnauthorizedToken'
         '500':
-          description: |
-            서버 내부 오류. 이 엔드포인트는 오류 메시지 원문을 본문으로 반환한다.
+          description: 서버 내부 오류
           content:
-            text/plain:
+            application/json:
               schema:
-                type: string
+                $ref: '#/components/schemas/ErrorResponse'
 
 components:
   securitySchemes:
@@ -629,6 +632,18 @@ components:
             type: string
 
   schemas:
+    ErrorResponse:
+      type: object
+      description: |
+        구조화 에러 응답 — strict 전환된 엔드포인트의 에러 계약.
+        미전환 엔드포인트는 아직 text/plain(`http.Error`)을 반환한다(전환 시 이 스키마로 수렴).
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          description: 사람이 읽을 수 있는 오류 설명
+
     JobPostingStatus:
       type: string
       description: 공고 상태. 원천(careerhub-posting-service)의 전체 값 목록이다.
