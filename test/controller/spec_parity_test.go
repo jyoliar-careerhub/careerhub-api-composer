@@ -12,7 +12,7 @@ import (
 // 명세의 default 선언과 코드 상수의 정합성 검사 (#14 패턴 보강 코멘트).
 // default 주입은 도구가 자동화하지 않아 코드 소유로 남는다 — 어긋나면 여기서 잡는다.
 func TestSpecDefaults_MatchCodeConstants(t *testing.T) {
-	swagger, err := api.GetSwagger()
+	swagger, err := api.GetSpec()
 	require.NoError(t, err)
 
 	op := swagger.Paths.Find("/company-review/reviews").Get

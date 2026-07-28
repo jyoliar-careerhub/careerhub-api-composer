@@ -60,13 +60,13 @@ func NewStrictHTTPHandler(ssi api.StrictServerInterface, baseRouter *mux.Router)
 	})
 }
 
-// NewSpecValidationMW는 들어오는 요청을 내장 명세(GetSwagger)와 대조하는 미들웨어를 만든다.
+// NewSpecValidationMW는 들어오는 요청을 내장 명세(GetSpec)와 대조하는 미들웨어를 만든다.
 // 필수 누락·타입 불일치·minimum/maximum 위반이 핸들러 도달 전에 ErrorResponse 400으로
 // 거부된다 — 검증 규칙의 원천이 명세 하나로 수렴한다(strict 구현에는 명세로 표현 불가한
 // 검증만 남는다). rootPath는 배포 prefix(ROOT_PATH) — 명세 경로와 대조 전에 잘라낸다.
 // 인증·권한은 이 미들웨어의 관할이 아니다(기존 미들웨어 체인이 한다).
 func NewSpecValidationMW(rootPath string) (mux.MiddlewareFunc, error) {
-	swagger, err := api.GetSwagger()
+	swagger, err := api.GetSpec()
 	if err != nil {
 		return nil, err
 	}
