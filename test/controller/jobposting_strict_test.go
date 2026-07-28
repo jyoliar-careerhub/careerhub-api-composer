@@ -79,9 +79,9 @@ func TestJobPostingStrict_GetJobPostings(t *testing.T) {
 		query := encodeQuery(t, map[string]any{})
 
 		for name, path := range map[string]string{
-			"page=0 (minimum 1)":    "/api/job_postings?page=0&size=10&encoded_query=" + query,
+			"page=0 (minimum 1)":     "/api/job_postings?page=0&size=10&encoded_query=" + query,
 			"size=101 (maximum 100)": "/api/job_postings?page=1&size=101&encoded_query=" + query,
-			"page 누락 (required)":   "/api/job_postings?size=10&encoded_query=" + query,
+			"page 누락 (required)":     "/api/job_postings?size=10&encoded_query=" + query,
 		} {
 			resp, body := doRequest(t, http.MethodGet, server.URL+path, "", nil)
 			require.Equal(t, http.StatusBadRequest, resp.StatusCode, "%s — body: %s", name, body)

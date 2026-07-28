@@ -53,12 +53,16 @@ type fakeReviewClient struct {
 	reviews       []*reviewGrpc.Review
 	reviewsErr    error
 	companyScores map[string]*reviewGrpc.CompanyScore
+	scoresErr     error
 
 	capture    ctxCapture
 	gotReviews *reviewGrpc.GetCompanyReviewsRequest
 }
 
 func (f *fakeReviewClient) GetCompanyScores(ctx context.Context, in *reviewGrpc.GetCompanyScoresRequest, opts ...grpc.CallOption) (*reviewGrpc.GetCompanyScoresResponse, error) {
+	if f.scoresErr != nil {
+		return nil, f.scoresErr
+	}
 	return &reviewGrpc.GetCompanyScoresResponse{CompanyScores: f.companyScores}, nil
 }
 
@@ -72,18 +76,18 @@ func (f *fakeReviewClient) GetCompanyReviews(ctx context.Context, in *reviewGrpc
 }
 
 type fakePostingClient struct {
-	jobPostings   []*postingGrpc.JobPostingRes
-	count         int64
-	detail        *postingGrpc.JobPostingDetailRes // nil이면 IsExist=false
-	categories    *postingGrpc.CategoriesResponse
-	skills        *postingGrpc.SkillsResponse
-	companies     *postingGrpc.CompaniesResponse
-	err           error
-	postingsById  []*postingGrpc.JobPostingRes
-	gotJobReq     *postingGrpc.JobPostingsRequest
-	gotCompanies  *postingGrpc.CompaniesRequest
-	gotDetailReq  *postingGrpc.JobPostingDetailRequest
-	capture       ctxCapture
+	jobPostings  []*postingGrpc.JobPostingRes
+	count        int64
+	detail       *postingGrpc.JobPostingDetailRes // nil이면 IsExist=false
+	categories   *postingGrpc.CategoriesResponse
+	skills       *postingGrpc.SkillsResponse
+	companies    *postingGrpc.CompaniesResponse
+	err          error
+	postingsById []*postingGrpc.JobPostingRes
+	gotJobReq    *postingGrpc.JobPostingsRequest
+	gotCompanies *postingGrpc.CompaniesRequest
+	gotDetailReq *postingGrpc.JobPostingDetailRequest
+	capture      ctxCapture
 }
 
 func (f *fakePostingClient) JobPostings(ctx context.Context, in *postingGrpc.JobPostingsRequest, opts ...grpc.CallOption) (*postingGrpc.JobPostingsResponse, error) {
@@ -138,16 +142,17 @@ func (f *fakePostingClient) Companies(ctx context.Context, in *postingGrpc.Compa
 }
 
 type fakeScrapJobClient struct {
-	scrapJobs   []*scrapGrpc.ScrapJob // GetScrapJobs·GetScrapJobsById·GetUntaggedScrapJobs 공용
-	isExisted   bool
-	tags        []string
-	err         error
-	gotGet      *scrapGrpc.GetScrapJobsRequest
-	gotAdd      *scrapGrpc.AddScrapJobRequest
-	gotRemove   *scrapGrpc.RemoveScrapJobRequest
-	gotAddTag   *scrapGrpc.AddTagRequest
+	scrapJobs    []*scrapGrpc.ScrapJob // GetScrapJobs·GetScrapJobsById·GetUntaggedScrapJobs 공용
+	byIdErr      error                 // GetScrapJobsById 전용 에러 (보강 열화 경로 테스트용)
+	isExisted    bool
+	tags         []string
+	err          error
+	gotGet       *scrapGrpc.GetScrapJobsRequest
+	gotAdd       *scrapGrpc.AddScrapJobRequest
+	gotRemove    *scrapGrpc.RemoveScrapJobRequest
+	gotAddTag    *scrapGrpc.AddTagRequest
 	gotRemoveTag *scrapGrpc.RemoveTagRequest
-	capture     ctxCapture
+	capture      ctxCapture
 }
 
 func (f *fakeScrapJobClient) GetScrapJobs(ctx context.Context, in *scrapGrpc.GetScrapJobsRequest, opts ...grpc.CallOption) (*scrapGrpc.GetScrapJobsResponse, error) {
@@ -199,6 +204,9 @@ func (f *fakeScrapJobClient) GetScrapTags(ctx context.Context, in *scrapGrpc.Get
 }
 
 func (f *fakeScrapJobClient) GetScrapJobsById(ctx context.Context, in *scrapGrpc.GetScrapJobsByIdRequest, opts ...grpc.CallOption) (*scrapGrpc.GetScrapJobsResponse, error) {
+	if f.byIdErr != nil {
+		return nil, f.byIdErr
+	}
 	return &scrapGrpc.GetScrapJobsResponse{ScrapJobs: f.scrapJobs}, nil
 }
 
@@ -210,14 +218,14 @@ func (f *fakeScrapJobClient) GetUntaggedScrapJobs(ctx context.Context, in *scrap
 }
 
 type fakeMatchJobClient struct {
-	findRes    *scrapGrpc.FindMatchJobResponse
-	isSuccess  bool
-	err        error
-	gotAdd     *scrapGrpc.AddConditionRequest
-	gotUpdate  *scrapGrpc.UpdateConditionRequest
-	gotDelete  *scrapGrpc.DeleteConditionRequest
-	gotAgree   *scrapGrpc.UpdateAgreeToMailRequest
-	capture    ctxCapture
+	findRes   *scrapGrpc.FindMatchJobResponse
+	isSuccess bool
+	err       error
+	gotAdd    *scrapGrpc.AddConditionRequest
+	gotUpdate *scrapGrpc.UpdateConditionRequest
+	gotDelete *scrapGrpc.DeleteConditionRequest
+	gotAgree  *scrapGrpc.UpdateAgreeToMailRequest
+	capture   ctxCapture
 }
 
 func (f *fakeMatchJobClient) FindMatchJob(ctx context.Context, in *scrapGrpc.FindMatchJobRequest, opts ...grpc.CallOption) (*scrapGrpc.FindMatchJobResponse, error) {
