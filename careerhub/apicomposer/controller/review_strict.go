@@ -49,7 +49,7 @@ func (c *ReviewStrictController) GetCompanyReviews(ctx context.Context, request 
 	if err != nil {
 		// 오류 원문은 로그로만 — 응답에는 노출하지 않는다 (기존 err.Error() 노출은 에러 계약 개정으로 폐기)
 		llog.LogErr(ctx, err)
-		return api.GetCompanyReviews500JSONResponse{InternalServerErrorJSONResponse: api.InternalServerErrorJSONResponse{Message: "Internal Server Error"}}, nil
+		return internalError500[api.GetCompanyReviews500JSONResponse](), nil
 	}
 
 	return api.GetCompanyReviews200JSONResponse(convertReviewsToAPI(reviews)), nil

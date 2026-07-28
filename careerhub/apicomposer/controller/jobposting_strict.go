@@ -29,26 +29,10 @@ func NewJobPostingStrictController(postingService *posting.PostingService) *JobP
 const cacheControlDay = "max-age=86400, public"
 const cacheControlHalfDay = "max-age=43200, public"
 
-// parseEncodedQuery — base64 디코딩은 생성 바인딩이 이미 끝냈다. JSON 파싱·검증만 한다.
-// 오류 메시지는 기존 IsInvalidQuery의 wire("bad request" / IsValid의 검증 메시지)를 유지한다.
-func parseEncodedQuery(ctx context.Context, decoded []byte) (*query.Query, *string) {
-	var queryReq query.Query
-	if err := json.Unmarshal(decoded, &queryReq); err != nil {
-		llog.LogErr(ctx, err)
-		msg := "bad request"
-		return nil, &msg
-	}
-	if err := posting.IsValid(&queryReq); err != nil {
-		msg := err.Error()
-		return nil, &msg
-	}
-	return &queryReq, nil
-}
-
 func (c *JobPostingStrictController) GetJobPostings(ctx context.Context, request api.GetJobPostingsRequestObject) (api.GetJobPostingsResponseObject, error) {
 	queryReq, errMsg := parseEncodedQuery(ctx, request.Params.EncodedQuery)
 	if errMsg != nil {
-		return api.GetJobPostings400JSONResponse{BadRequestJSONResponse: api.BadRequestJSONResponse{Message: *errMsg}}, nil
+		return badRequest400[api.GetJobPostings400JSONResponse](*errMsg), nil
 	}
 
 	req := &posting.JobPostingsRequest{
@@ -66,22 +50,38 @@ func (c *JobPostingStrictController) GetJobPostings(ctx context.Context, request
 	}
 	if err != nil {
 		llog.LogErr(ctx, err)
-		return api.GetJobPostings500JSONResponse{InternalServerErrorJSONResponse: api.InternalServerErrorJSONResponse{Message: messageInternalServerError}}, nil
+		return internalError500[api.GetJobPostings500JSONResponse](), nil
 	}
 
 	return api.GetJobPostings200JSONResponse(convertJobPostingsToAPI(jobPostings)), nil
 }
 
+// parseEncodedQuery — base64 디코딩은 생성 바인딩이 이미 끝냈다. JSON 파싱·검증만 한다.
+// 오류 메시지는 기존 IsInvalidQuery의 wire("bad request" / IsValid의 검증 메시지)를 유지한다.
+func parseEncodedQuery(ctx context.Context, decoded []byte) (*query.Query, *string) {
+	var queryReq query.Query
+	if err := json.Unmarshal(decoded, &queryReq); err != nil {
+		llog.LogErr(ctx, err)
+		msg := "bad request"
+		return nil, &msg
+	}
+	if err := posting.IsValid(&queryReq); err != nil {
+		msg := err.Error()
+		return nil, &msg
+	}
+	return &queryReq, nil
+}
+
 func (c *JobPostingStrictController) CountJobPostings(ctx context.Context, request api.CountJobPostingsRequestObject) (api.CountJobPostingsResponseObject, error) {
 	queryReq, errMsg := parseEncodedQuery(ctx, request.Params.EncodedQuery)
 	if errMsg != nil {
-		return api.CountJobPostings400JSONResponse{BadRequestJSONResponse: api.BadRequestJSONResponse{Message: *errMsg}}, nil
+		return badRequest400[api.CountJobPostings400JSONResponse](*errMsg), nil
 	}
 
 	count, err := c.postingService.CountJobPostings(ctx, queryReq)
 	if err != nil {
 		llog.LogErr(ctx, err)
-		return api.CountJobPostings500JSONResponse{InternalServerErrorJSONResponse: api.InternalServerErrorJSONResponse{Message: messageInternalServerError}}, nil
+		return internalError500[api.CountJobPostings500JSONResponse](), nil
 	}
 
 	return api.CountJobPostings200JSONResponse(api.CountResponse{Count: count}), nil
@@ -103,10 +103,10 @@ func (c *JobPostingStrictController) GetJobPostingDetail(ctx context.Context, re
 	}
 	if err != nil {
 		llog.LogErr(ctx, err)
-		return api.GetJobPostingDetail500JSONResponse{InternalServerErrorJSONResponse: api.InternalServerErrorJSONResponse{Message: messageInternalServerError}}, nil
+		return internalError500[api.GetJobPostingDetail500JSONResponse](), nil
 	}
 	if !isExist {
-		return api.GetJobPostingDetail404JSONResponse{NotFoundJSONResponse: api.NotFoundJSONResponse{Message: "job posting not found"}}, nil
+		return notFound404[api.GetJobPostingDetail404JSONResponse]("job posting not found"), nil
 	}
 
 	return api.GetJobPostingDetail200JSONResponse(convertJobPostingDetailToAPI(resp)), nil
@@ -116,9 +116,18 @@ func (c *JobPostingStrictController) GetCategories(ctx context.Context, request 
 	categories, err := c.postingService.Categories(ctx)
 	if err != nil {
 		llog.LogErr(ctx, err)
-		return api.GetCategories500JSONResponse{InternalServerErrorJSONResponse: api.InternalServerErrorJSONResponse{Message: messageInternalServerError}}, nil
+		return internalError500[api.GetCategories500JSONResponse](), nil
 	}
 
+	cacheControl := cacheControlDay
+	return api.GetCategories200JSONResponse{
+		Body:    convertCategoriesToAPI(categories),
+		Headers: api.GetCategories200ResponseHeaders{CacheControl: &cacheControl},
+	}, nil
+}
+
+// convertCategoriesToAPI — proto omitempty의 "빈 값 필드 생략" wire 유지.
+func convertCategoriesToAPI(categories *postingGrpc.CategoriesResponse) api.CategoriesResponse {
 	var bySite *[]api.CategoryRes
 	if len(categories.CategoriesBySite) > 0 {
 		converted := make([]api.CategoryRes, len(categories.CategoriesBySite))
@@ -130,21 +139,25 @@ func (c *JobPostingStrictController) GetCategories(ctx context.Context, request 
 		}
 		bySite = &converted
 	}
-
-	cacheControl := cacheControlDay
-	return api.GetCategories200JSONResponse{
-		Body:    api.CategoriesResponse{CategoriesBySite: bySite},
-		Headers: api.GetCategories200ResponseHeaders{CacheControl: &cacheControl},
-	}, nil
+	return api.CategoriesResponse{CategoriesBySite: bySite}
 }
 
 func (c *JobPostingStrictController) GetSkills(ctx context.Context, request api.GetSkillsRequestObject) (api.GetSkillsResponseObject, error) {
 	skills, err := c.postingService.Skills(ctx)
 	if err != nil {
 		llog.LogErr(ctx, err)
-		return api.GetSkills500JSONResponse{InternalServerErrorJSONResponse: api.InternalServerErrorJSONResponse{Message: messageInternalServerError}}, nil
+		return internalError500[api.GetSkills500JSONResponse](), nil
 	}
 
+	cacheControl := cacheControlDay
+	return api.GetSkills200JSONResponse{
+		Body:    convertSkillsToAPI(skills),
+		Headers: api.GetSkills200ResponseHeaders{CacheControl: &cacheControl},
+	}, nil
+}
+
+// convertSkillsToAPI — proto omitempty의 "빈 값 필드 생략" wire 유지.
+func convertSkillsToAPI(skills *postingGrpc.SkillsResponse) api.SkillsResponse {
 	var converted *[]api.SkillRes
 	if len(skills.Skills) > 0 {
 		items := make([]api.SkillRes, len(skills.Skills))
@@ -156,12 +169,7 @@ func (c *JobPostingStrictController) GetSkills(ctx context.Context, request api.
 		}
 		converted = &items
 	}
-
-	cacheControl := cacheControlDay
-	return api.GetSkills200JSONResponse{
-		Body:    api.SkillsResponse{Skills: converted},
-		Headers: api.GetSkills200ResponseHeaders{CacheControl: &cacheControl},
-	}, nil
+	return api.SkillsResponse{Skills: converted}
 }
 
 func (c *JobPostingStrictController) GetCompanies(ctx context.Context, request api.GetCompaniesRequestObject) (api.GetCompaniesResponseObject, error) {
@@ -169,36 +177,43 @@ func (c *JobPostingStrictController) GetCompanies(ctx context.Context, request a
 	companies, err := c.postingService.Companies(ctx, request.Params.Keyword)
 	if err != nil {
 		llog.LogErr(ctx, err)
-		return api.GetCompanies500JSONResponse{InternalServerErrorJSONResponse: api.InternalServerErrorJSONResponse{Message: messageInternalServerError}}, nil
-	}
-
-	var converted *[]api.CompanyRes
-	if len(companies.Companies) > 0 {
-		items := make([]api.CompanyRes, len(companies.Companies))
-		for i, comp := range companies.Companies {
-			var siteCompanies *[]api.SiteCompanyRes
-			if len(comp.SiteCompanies) > 0 {
-				scs := make([]api.SiteCompanyRes, len(comp.SiteCompanies))
-				for j, sc := range comp.SiteCompanies {
-					scs[j] = api.SiteCompanyRes{
-						Site:        strOrOmit(sc.Site),
-						CompanyId:   strOrOmit(sc.CompanyId),
-						CompanyName: strOrOmit(sc.CompanyName),
-					}
-				}
-				siteCompanies = &scs
-			}
-			items[i] = api.CompanyRes{
-				DefaultName:   strOrOmit(comp.DefaultName),
-				SiteCompanies: siteCompanies,
-			}
-		}
-		converted = &items
+		return internalError500[api.GetCompanies500JSONResponse](), nil
 	}
 
 	cacheControl := cacheControlHalfDay
 	return api.GetCompanies200JSONResponse{
-		Body:    api.CompaniesResponse{Companies: converted},
+		Body:    convertCompaniesToAPI(companies),
 		Headers: api.GetCompanies200ResponseHeaders{CacheControl: &cacheControl},
 	}, nil
+}
+
+// convertCompaniesToAPI — proto omitempty의 "빈 값 필드 생략" wire 유지.
+func convertCompaniesToAPI(companies *postingGrpc.CompaniesResponse) api.CompaniesResponse {
+	var converted *[]api.CompanyRes
+	if len(companies.Companies) > 0 {
+		items := make([]api.CompanyRes, len(companies.Companies))
+		for i, comp := range companies.Companies {
+			items[i] = api.CompanyRes{
+				DefaultName:   strOrOmit(comp.DefaultName),
+				SiteCompanies: convertSiteCompaniesToAPI(comp.SiteCompanies),
+			}
+		}
+		converted = &items
+	}
+	return api.CompaniesResponse{Companies: converted}
+}
+
+func convertSiteCompaniesToAPI(siteCompanies []*postingGrpc.SiteCompanyRes) *[]api.SiteCompanyRes {
+	if len(siteCompanies) == 0 {
+		return nil
+	}
+	converted := make([]api.SiteCompanyRes, len(siteCompanies))
+	for i, sc := range siteCompanies {
+		converted[i] = api.SiteCompanyRes{
+			Site:        strOrOmit(sc.Site),
+			CompanyId:   strOrOmit(sc.CompanyId),
+			CompanyName: strOrOmit(sc.CompanyName),
+		}
+	}
+	return &converted
 }

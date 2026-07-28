@@ -31,13 +31,13 @@ func (c *ScrapJobStrictController) GetScrapJobs(ctx context.Context, request api
 	claims, ok := middleware.GetClaims(ctx)
 	if !ok {
 		llog.LogErr(ctx, terr.New("No claims in context"))
-		return api.GetScrapJobs401JSONResponse{UnauthorizedJSONResponse: api.UnauthorizedJSONResponse{Message: messageUnauthorized}}, nil
+		return unauthorized401[api.GetScrapJobs401JSONResponse](), nil
 	}
 
 	jobPostings, err := c.scrapJobSvc.GetScrapJobs(ctx, claims, request.Params.Tag)
 	if err != nil {
 		llog.LogErr(ctx, err)
-		return api.GetScrapJobs500JSONResponse{InternalServerErrorJSONResponse: api.InternalServerErrorJSONResponse{Message: messageInternalServerError}}, nil
+		return internalError500[api.GetScrapJobs500JSONResponse](), nil
 	}
 
 	return api.GetScrapJobs200JSONResponse(convertJobPostingsToAPI(jobPostings)), nil
@@ -47,7 +47,7 @@ func (c *ScrapJobStrictController) AddScrapJob(ctx context.Context, request api.
 	claims, ok := middleware.GetClaims(ctx)
 	if !ok {
 		llog.LogErr(ctx, terr.New("No claims in context"))
-		return api.AddScrapJob401JSONResponse{UnauthorizedJSONResponse: api.UnauthorizedJSONResponse{Message: messageUnauthorized}}, nil
+		return unauthorized401[api.AddScrapJob401JSONResponse](), nil
 	}
 
 	err := c.scrapJobSvc.AddScrapJob(ctx, &scrapGrpc.AddScrapJobRequest{
@@ -57,7 +57,7 @@ func (c *ScrapJobStrictController) AddScrapJob(ctx context.Context, request api.
 	})
 	if err != nil {
 		llog.LogErr(ctx, err)
-		return api.AddScrapJob500JSONResponse{InternalServerErrorJSONResponse: api.InternalServerErrorJSONResponse{Message: messageInternalServerError}}, nil
+		return internalError500[api.AddScrapJob500JSONResponse](), nil
 	}
 
 	return api.AddScrapJob201Response{}, nil
@@ -67,7 +67,7 @@ func (c *ScrapJobStrictController) RemoveScrapJob(ctx context.Context, request a
 	claims, ok := middleware.GetClaims(ctx)
 	if !ok {
 		llog.LogErr(ctx, terr.New("No claims in context"))
-		return api.RemoveScrapJob401JSONResponse{UnauthorizedJSONResponse: api.UnauthorizedJSONResponse{Message: messageUnauthorized}}, nil
+		return unauthorized401[api.RemoveScrapJob401JSONResponse](), nil
 	}
 
 	isExisted, err := c.scrapJobSvc.RemoveScrapJob(ctx, &scrapGrpc.RemoveScrapJobRequest{
@@ -77,10 +77,10 @@ func (c *ScrapJobStrictController) RemoveScrapJob(ctx context.Context, request a
 	})
 	if err != nil {
 		llog.LogErr(ctx, err)
-		return api.RemoveScrapJob500JSONResponse{InternalServerErrorJSONResponse: api.InternalServerErrorJSONResponse{Message: messageInternalServerError}}, nil
+		return internalError500[api.RemoveScrapJob500JSONResponse](), nil
 	}
 	if !isExisted {
-		return api.RemoveScrapJob404JSONResponse{NotFoundJSONResponse: api.NotFoundJSONResponse{Message: messageScrapJobNotFound}}, nil
+		return notFound404[api.RemoveScrapJob404JSONResponse](messageScrapJobNotFound), nil
 	}
 
 	return api.RemoveScrapJob200Response{}, nil
@@ -90,13 +90,13 @@ func (c *ScrapJobStrictController) GetUntaggedScrapJobs(ctx context.Context, req
 	claims, ok := middleware.GetClaims(ctx)
 	if !ok {
 		llog.LogErr(ctx, terr.New("No claims in context"))
-		return api.GetUntaggedScrapJobs401JSONResponse{UnauthorizedJSONResponse: api.UnauthorizedJSONResponse{Message: messageUnauthorized}}, nil
+		return unauthorized401[api.GetUntaggedScrapJobs401JSONResponse](), nil
 	}
 
 	scrapJobs, err := c.scrapJobSvc.GetUntaggedScrapJobs(ctx, claims.UserId)
 	if err != nil {
 		llog.LogErr(ctx, err)
-		return api.GetUntaggedScrapJobs500JSONResponse{InternalServerErrorJSONResponse: api.InternalServerErrorJSONResponse{Message: messageInternalServerError}}, nil
+		return internalError500[api.GetUntaggedScrapJobs500JSONResponse](), nil
 	}
 
 	return api.GetUntaggedScrapJobs200JSONResponse(convertScrapJobsToAPI(scrapJobs)), nil
@@ -122,13 +122,13 @@ func (c *ScrapJobStrictController) GetScrapTags(ctx context.Context, request api
 	claims, ok := middleware.GetClaims(ctx)
 	if !ok {
 		llog.LogErr(ctx, terr.New("No claims in context"))
-		return api.GetScrapTags401JSONResponse{UnauthorizedJSONResponse: api.UnauthorizedJSONResponse{Message: messageUnauthorized}}, nil
+		return unauthorized401[api.GetScrapTags401JSONResponse](), nil
 	}
 
 	res, err := c.scrapJobSvc.GetScrapTags(ctx, claims.UserId)
 	if err != nil {
 		llog.LogErr(ctx, err)
-		return api.GetScrapTags500JSONResponse{InternalServerErrorJSONResponse: api.InternalServerErrorJSONResponse{Message: messageInternalServerError}}, nil
+		return internalError500[api.GetScrapTags500JSONResponse](), nil
 	}
 
 	return api.GetScrapTags200JSONResponse(api.ScrapTagsResponse{Tags: sliceOrOmit(res.Tags)}), nil
@@ -138,7 +138,7 @@ func (c *ScrapJobStrictController) AddScrapTag(ctx context.Context, request api.
 	claims, ok := middleware.GetClaims(ctx)
 	if !ok {
 		llog.LogErr(ctx, terr.New("No claims in context"))
-		return api.AddScrapTag401JSONResponse{UnauthorizedJSONResponse: api.UnauthorizedJSONResponse{Message: messageUnauthorized}}, nil
+		return unauthorized401[api.AddScrapTag401JSONResponse](), nil
 	}
 
 	isExisted, err := c.scrapJobSvc.AddTag(ctx, &scrapGrpc.AddTagRequest{
@@ -149,10 +149,10 @@ func (c *ScrapJobStrictController) AddScrapTag(ctx context.Context, request api.
 	})
 	if err != nil {
 		llog.LogErr(ctx, err)
-		return api.AddScrapTag500JSONResponse{InternalServerErrorJSONResponse: api.InternalServerErrorJSONResponse{Message: messageInternalServerError}}, nil
+		return internalError500[api.AddScrapTag500JSONResponse](), nil
 	}
 	if !isExisted {
-		return api.AddScrapTag404JSONResponse{NotFoundJSONResponse: api.NotFoundJSONResponse{Message: messageScrapJobNotFound}}, nil
+		return notFound404[api.AddScrapTag404JSONResponse](messageScrapJobNotFound), nil
 	}
 
 	return api.AddScrapTag200Response{}, nil
@@ -162,7 +162,7 @@ func (c *ScrapJobStrictController) RemoveScrapTag(ctx context.Context, request a
 	claims, ok := middleware.GetClaims(ctx)
 	if !ok {
 		llog.LogErr(ctx, terr.New("No claims in context"))
-		return api.RemoveScrapTag401JSONResponse{UnauthorizedJSONResponse: api.UnauthorizedJSONResponse{Message: messageUnauthorized}}, nil
+		return unauthorized401[api.RemoveScrapTag401JSONResponse](), nil
 	}
 
 	isExisted, err := c.scrapJobSvc.RemoveTag(ctx, &scrapGrpc.RemoveTagRequest{
@@ -173,10 +173,10 @@ func (c *ScrapJobStrictController) RemoveScrapTag(ctx context.Context, request a
 	})
 	if err != nil {
 		llog.LogErr(ctx, err)
-		return api.RemoveScrapTag500JSONResponse{InternalServerErrorJSONResponse: api.InternalServerErrorJSONResponse{Message: messageInternalServerError}}, nil
+		return internalError500[api.RemoveScrapTag500JSONResponse](), nil
 	}
 	if !isExisted {
-		return api.RemoveScrapTag404JSONResponse{NotFoundJSONResponse: api.NotFoundJSONResponse{Message: messageScrapJobNotFound}}, nil
+		return notFound404[api.RemoveScrapTag404JSONResponse](messageScrapJobNotFound), nil
 	}
 
 	return api.RemoveScrapTag200Response{}, nil

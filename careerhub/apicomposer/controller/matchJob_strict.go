@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/api"
+	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/common/domain"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/common/query"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/middleware"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/userinfo"
@@ -36,9 +37,13 @@ func (c *MatchJobStrictController) FindMatchJob(ctx context.Context, request api
 	matchJob, err := c.matchJobSvc.FindMatchJob(ctx, claims.UserId)
 	if err != nil {
 		llog.LogErr(ctx, err)
-		return api.FindMatchJob500JSONResponse{InternalServerErrorJSONResponse: api.InternalServerErrorJSONResponse{Message: messageInternalServerError}}, nil
+		return internalError500[api.FindMatchJob500JSONResponse](), nil
 	}
 
+	return api.FindMatchJob200JSONResponse(convertMatchJobToAPI(matchJob)), nil
+}
+
+func convertMatchJobToAPI(matchJob *domain.MatchJob) api.MatchJob {
 	conditions := make([]api.Condition, len(matchJob.Conditions))
 	for i, cond := range matchJob.Conditions {
 		conditions[i] = api.Condition{
@@ -47,82 +52,10 @@ func (c *MatchJobStrictController) FindMatchJob(ctx context.Context, request api
 			Query:         convertQueryToAPI(cond.Query),
 		}
 	}
-
-	return api.FindMatchJob200JSONResponse(api.MatchJob{
+	return api.MatchJob{
 		Conditions:  conditions,
 		AgreeToMail: matchJob.AgreeToMail,
-	}), nil
-}
-
-func (c *MatchJobStrictController) AddMatchJobCondition(ctx context.Context, request api.AddMatchJobConditionRequestObject) (api.AddMatchJobConditionResponseObject, error) {
-	claims, ok := middleware.GetClaims(ctx)
-	if !ok {
-		llog.LogErr(ctx, terr.New("No claims in context"))
-		return api.AddMatchJobCondition401Response{}, nil
 	}
-
-	res, err := c.matchJobSvc.AddCondition(ctx, claims.UserId, conditionLimitCount, &userinfo.AddConditionRequest{
-		ConditionName: request.Body.ConditionName,
-		Query:         convertAPIQueryToDomain(request.Body.Query),
-	})
-	if err != nil {
-		llog.LogErr(ctx, err)
-		return api.AddMatchJobCondition500JSONResponse{InternalServerErrorJSONResponse: api.InternalServerErrorJSONResponse{Message: messageInternalServerError}}, nil
-	}
-
-	return api.AddMatchJobCondition200JSONResponse(api.IsSuccessResponse{IsSuccess: res.IsSuccess}), nil
-}
-
-func (c *MatchJobStrictController) UpdateMatchJobCondition(ctx context.Context, request api.UpdateMatchJobConditionRequestObject) (api.UpdateMatchJobConditionResponseObject, error) {
-	claims, ok := middleware.GetClaims(ctx)
-	if !ok {
-		llog.LogErr(ctx, terr.New("No claims in context"))
-		return api.UpdateMatchJobCondition401Response{}, nil
-	}
-
-	res, err := c.matchJobSvc.UpdateCondition(ctx, claims.UserId, &userinfo.UpdateConditionRequest{
-		ConditionId:   request.Body.ConditionId,
-		ConditionName: request.Body.ConditionName,
-		Query:         convertAPIQueryToDomain(request.Body.Query),
-	})
-	if err != nil {
-		llog.LogErr(ctx, err)
-		return api.UpdateMatchJobCondition500JSONResponse{InternalServerErrorJSONResponse: api.InternalServerErrorJSONResponse{Message: messageInternalServerError}}, nil
-	}
-
-	return api.UpdateMatchJobCondition200JSONResponse(api.IsSuccessResponse{IsSuccess: res.IsSuccess}), nil
-}
-
-func (c *MatchJobStrictController) DeleteMatchJobCondition(ctx context.Context, request api.DeleteMatchJobConditionRequestObject) (api.DeleteMatchJobConditionResponseObject, error) {
-	claims, ok := middleware.GetClaims(ctx)
-	if !ok {
-		llog.LogErr(ctx, terr.New("No claims in context"))
-		return api.DeleteMatchJobCondition401Response{}, nil
-	}
-
-	res, err := c.matchJobSvc.DeleteCondition(ctx, claims.UserId, request.Body.ConditionId)
-	if err != nil {
-		llog.LogErr(ctx, err)
-		return api.DeleteMatchJobCondition500JSONResponse{InternalServerErrorJSONResponse: api.InternalServerErrorJSONResponse{Message: messageInternalServerError}}, nil
-	}
-
-	return api.DeleteMatchJobCondition200JSONResponse(api.IsSuccessResponse{IsSuccess: res.IsSuccess}), nil
-}
-
-func (c *MatchJobStrictController) UpdateAgreeToMail(ctx context.Context, request api.UpdateAgreeToMailRequestObject) (api.UpdateAgreeToMailResponseObject, error) {
-	claims, ok := middleware.GetClaims(ctx)
-	if !ok {
-		llog.LogErr(ctx, terr.New("No claims in context"))
-		return api.UpdateAgreeToMail401Response{}, nil
-	}
-
-	res, err := c.matchJobSvc.UpdateAgreeToMail(ctx, claims.UserId, request.Body.AgreeToMail)
-	if err != nil {
-		llog.LogErr(ctx, err)
-		return api.UpdateAgreeToMail500JSONResponse{InternalServerErrorJSONResponse: api.InternalServerErrorJSONResponse{Message: messageInternalServerError}}, nil
-	}
-
-	return api.UpdateAgreeToMail200JSONResponse(api.IsSuccessResponse{IsSuccess: res.IsSuccess}), nil
 }
 
 // convertQueryToAPI — 응답 방향. categories·skillNames는 서비스가 항상 non-nil로 주므로
@@ -160,6 +93,25 @@ func convertQueryToAPI(q *query.Query) api.Query {
 	}
 }
 
+func (c *MatchJobStrictController) AddMatchJobCondition(ctx context.Context, request api.AddMatchJobConditionRequestObject) (api.AddMatchJobConditionResponseObject, error) {
+	claims, ok := middleware.GetClaims(ctx)
+	if !ok {
+		llog.LogErr(ctx, terr.New("No claims in context"))
+		return api.AddMatchJobCondition401Response{}, nil
+	}
+
+	res, err := c.matchJobSvc.AddCondition(ctx, claims.UserId, conditionLimitCount, &userinfo.AddConditionRequest{
+		ConditionName: request.Body.ConditionName,
+		Query:         convertAPIQueryToDomain(request.Body.Query),
+	})
+	if err != nil {
+		llog.LogErr(ctx, err)
+		return internalError500[api.AddMatchJobCondition500JSONResponse](), nil
+	}
+
+	return api.AddMatchJobCondition200JSONResponse(api.IsSuccessResponse{IsSuccess: res.IsSuccess}), nil
+}
+
 // convertAPIQueryToDomain — 요청 방향. 생략된 필드는 nil로 두고 서비스 계층의 기존
 // nil 허용 동작에 맡긴다(기존 json 디코드 결과와 동일).
 func convertAPIQueryToDomain(q api.Query) *query.Query {
@@ -191,4 +143,56 @@ func convertAPIQueryToDomain(q api.Query) *query.Query {
 		MaxCareer:  q.MaxCareer,
 		Companies:  companies,
 	}
+}
+
+func (c *MatchJobStrictController) UpdateMatchJobCondition(ctx context.Context, request api.UpdateMatchJobConditionRequestObject) (api.UpdateMatchJobConditionResponseObject, error) {
+	claims, ok := middleware.GetClaims(ctx)
+	if !ok {
+		llog.LogErr(ctx, terr.New("No claims in context"))
+		return api.UpdateMatchJobCondition401Response{}, nil
+	}
+
+	res, err := c.matchJobSvc.UpdateCondition(ctx, claims.UserId, &userinfo.UpdateConditionRequest{
+		ConditionId:   request.Body.ConditionId,
+		ConditionName: request.Body.ConditionName,
+		Query:         convertAPIQueryToDomain(request.Body.Query),
+	})
+	if err != nil {
+		llog.LogErr(ctx, err)
+		return internalError500[api.UpdateMatchJobCondition500JSONResponse](), nil
+	}
+
+	return api.UpdateMatchJobCondition200JSONResponse(api.IsSuccessResponse{IsSuccess: res.IsSuccess}), nil
+}
+
+func (c *MatchJobStrictController) DeleteMatchJobCondition(ctx context.Context, request api.DeleteMatchJobConditionRequestObject) (api.DeleteMatchJobConditionResponseObject, error) {
+	claims, ok := middleware.GetClaims(ctx)
+	if !ok {
+		llog.LogErr(ctx, terr.New("No claims in context"))
+		return api.DeleteMatchJobCondition401Response{}, nil
+	}
+
+	res, err := c.matchJobSvc.DeleteCondition(ctx, claims.UserId, request.Body.ConditionId)
+	if err != nil {
+		llog.LogErr(ctx, err)
+		return internalError500[api.DeleteMatchJobCondition500JSONResponse](), nil
+	}
+
+	return api.DeleteMatchJobCondition200JSONResponse(api.IsSuccessResponse{IsSuccess: res.IsSuccess}), nil
+}
+
+func (c *MatchJobStrictController) UpdateAgreeToMail(ctx context.Context, request api.UpdateAgreeToMailRequestObject) (api.UpdateAgreeToMailResponseObject, error) {
+	claims, ok := middleware.GetClaims(ctx)
+	if !ok {
+		llog.LogErr(ctx, terr.New("No claims in context"))
+		return api.UpdateAgreeToMail401Response{}, nil
+	}
+
+	res, err := c.matchJobSvc.UpdateAgreeToMail(ctx, claims.UserId, request.Body.AgreeToMail)
+	if err != nil {
+		llog.LogErr(ctx, err)
+		return internalError500[api.UpdateAgreeToMail500JSONResponse](), nil
+	}
+
+	return api.UpdateAgreeToMail200JSONResponse(api.IsSuccessResponse{IsSuccess: res.IsSuccess}), nil
 }
