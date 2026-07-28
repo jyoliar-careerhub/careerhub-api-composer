@@ -3,6 +3,7 @@ package controller
 import (
 	"encoding/json"
 	"net/http"
+	"regexp"
 	"testing"
 	"time"
 
@@ -104,11 +105,59 @@ func TestAuthContract_LoginRequiredBySpecSecurity(t *testing.T) {
 }
 
 func TestAuthContract_PublicEndpointWithoutLogin(t *testing.T) {
-	// AC: 공개 엔드포인트(security `{}` 대안 선언)는 여전히 비로그인 접근 가능하다
+	// AC: 공개 엔드포인트(security `{}` 대안 선언)는 여전히 비로그인 접근 가능하다 — 200 happy path
 	f := newFakes()
 	f.posting.categories = &postingGrpc.CategoriesResponse{}
 	server, _ := newStrictTestServer(t, f)
 
 	resp, body := doRequest(t, http.MethodGet, server.URL+"/api/categories", "", nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode, "body: %s", body)
+}
+
+func TestAuthContract_SecuritySweepFromSpec(t *testing.T) {
+	// 로그인 필수 여부의 원천이 명세라는 계약을 명세 자체로 전수 검증한다:
+	// 내장 명세의 전 연산을 순회하며 비로그인 요청을 보내 —
+	//   `{}` 대안이 선언된 공개 연산은 401로 막히지 않아야 하고(파라미터 400 등은 무방),
+	//   bearerAuth 전용 연산은 401 + ErrorResponse여야 한다.
+	// 하드코딩 목록이 없으므로 새 엔드포인트도 명세에 선언만 되면 자동으로 검증된다.
+	spec, err := api.GetSpec()
+	require.NoError(t, err)
+
+	f := newFakes()
+	// 필수 파라미터가 없는 공개 연산은 핸들러까지 도달한다 — 빈 fake의 nil 역참조 방지
+	f.posting.categories = &postingGrpc.CategoriesResponse{}
+	f.posting.skills = &postingGrpc.SkillsResponse{}
+	server, _ := newStrictTestServer(t, f)
+
+	pathParamRe := regexp.MustCompile(`\{[^}]+\}`)
+
+	var publicOps, protectedOps int
+	for path, item := range spec.Paths.Map() {
+		for method, op := range item.Operations() {
+			public := op.Security == nil // security 미선언 = 요구 없음
+			if op.Security != nil {
+				for _, req := range *op.Security {
+					if len(req) == 0 {
+						public = true
+					}
+				}
+			}
+
+			url := server.URL + testPrefix + pathParamRe.ReplaceAllString(path, "x")
+			resp, body := doRequest(t, method, url, "", nil)
+
+			if public {
+				publicOps++
+				assert.NotEqual(t, http.StatusUnauthorized, resp.StatusCode,
+					"%s %s — 공개(`{}` 대안) 연산이 비로그인에서 401로 막혔다 (body: %s)", method, path, body)
+			} else {
+				protectedOps++
+				requireUnauthorizedJSON(t, resp, body)
+			}
+		}
+	}
+
+	// 순회가 비어 있으면 검증이 성립하지 않는다 — 현행 명세 기준 공개 7 · 보호 12
+	require.NotZero(t, publicOps)
+	require.NotZero(t, protectedOps)
 }
