@@ -9,7 +9,6 @@ import (
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
-	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/common/user_authority"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/controller"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/jwtresolver"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/middleware"
@@ -103,14 +102,20 @@ func Run(mainCtx context.Context) {
 	//rootRouter 설정
 	rootRouter := mux.NewRouter().PathPrefix(envVars.RootPath).Subrouter()
 
+	// 요청 검증 미들웨어 — 내장 명세와 대조해 파라미터·본문의 형식 위반을 400으로 거부
+	specValidationMW, err := controller.NewSpecValidationMW(envVars.RootPath)
+	checkErr(mainCtx, err)
+
 	// 미들웨어 체인 순서:
 	//   1) otelmux: incoming traceparent 헤더에서 server span 시작, ctx에 span 주입
 	//   2) TraceContextLoggerMW: ctx의 OTel span에서 trace_id/span_id를 string key로 추출 — goutils llog 호환
 	//   3) SetClaimsMW: JWT 파싱 (기존)
+	//   4) 명세 검증: 무효 토큰 401이 검증보다 먼저 끊기도록 SetClaimsMW 뒤에 둔다
 	rootRouter.Use(
 		otelmux.Middleware(app),
 		middleware.TraceContextLoggerMW(),
 		middleware.SetClaimsMW(jr),
+		specValidationMW,
 	)
 
 	postingService := posting.NewPostingService(postingClient, scrapJobClient, reviewClient)
@@ -118,25 +123,15 @@ func Run(mainCtx context.Context) {
 	scrapJobService := userinfo.NewScrapJobService(scrapJobClient, postingClient, reviewClient)
 	reviewService := review.NewReviewService(reviewClient)
 
-	jobPostingRouter := rootRouter.NewRoute().Subrouter()
-	// jobPostingRouter.Use(middleware.CheckHasAuthority(user_authority.AuthorityReadJobPosting))
-	controller.NewJobPostingController(postingService).RegisterRoutes(jobPostingRouter)
-
-	//userinfoRouter 설정
-	userinfoRouter := rootRouter.PathPrefix("/my").Subrouter()
-	scrapJobRouter := userinfoRouter.NewRoute().Subrouter()
-	// scrapJobRouter.Use(middleware.CheckHasAuthority(user_authority.AuthorityScrapJob))
-	controller.NewScrapJobController(scrapJobService).RegisterRoutes(scrapJobRouter)
-
-	//matchJobRouter 설정
-	matchJobRouter := userinfoRouter.NewRoute().Subrouter()
-	matchJobRouter.Use(middleware.CheckHasAuthority(user_authority.AuthorityMatchJob))
-	controller.NewMatchJobController(matchJobService).RegisterRoutes(matchJobRouter)
-
-	//reviewRouter 설정
-	reviewRouter := rootRouter.NewRoute().Subrouter()
-	// reviewRouter.Use(middleware.CheckHasAuthority(user_authority.AuthorityReadReview))
-	controller.NewReviewController(reviewService).RegisterRoutes(reviewRouter)
+	// 전 라우트가 명세 생성 배선으로 등록된다 (ADR-0018 — 손 등록 없음).
+	// matchJob 연산의 권한 검사(AUTHORITY_MATCH_JOB)는 배선 내부의 권한 미들웨어가 한다.
+	strictServer := controller.NewStrictServer(
+		controller.NewJobPostingStrictController(postingService),
+		controller.NewScrapJobStrictController(scrapJobService),
+		controller.NewMatchJobStrictController(matchJobService),
+		controller.NewReviewStrictController(reviewService),
+	)
+	controller.NewStrictHTTPHandler(strictServer, rootRouter)
 
 	var allowOrigins []string
 	if envVars.AccessControlAllowOrigin != nil {

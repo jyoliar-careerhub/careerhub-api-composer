@@ -5,4 +5,6 @@ generate:
   models: true
   gorilla-server: true
   strict-server: true
+  # 명세를 바이너리에 내장(GetSwagger) — 요청 검증 미들웨어·default 정합성 테스트의 입력
+  embedded-spec: true
 output: api.gen.go

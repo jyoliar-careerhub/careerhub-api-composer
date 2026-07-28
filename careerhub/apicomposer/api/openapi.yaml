@@ -11,7 +11,8 @@ info:
     - 인증: `Authorization: Bearer {JWT}` 헤더. 헤더가 존재하나 토큰이 무효(만료·서명 불일치)면
       전역 미들웨어가 본문 없는 401을 반환한다(공개 엔드포인트 포함). 형식 불량(malformed) 토큰은
       본문 없는 500을 반환한다.
-    - 에러 응답은 `http.Error` 기반의 `text/plain; charset=utf-8` 본문(메시지 + 개행)이다.
+    - 에러 응답은 구조화 JSON(`ErrorResponse`)이다. 단 전역 미들웨어가 끊는 응답(무효 토큰 401 ·
+      권한 부족 403 · 형식 불량 토큰 500)은 본문이 없다.
     - 모든 경로는 배포 환경변수 `ROOT_PATH`의 prefix 아래에 마운트될 수 있다.
   version: 0.1.0
 servers:
@@ -119,11 +120,7 @@ paths:
         '401':
           $ref: '#/components/responses/UnauthorizedToken'
         '404':
-          description: 해당 공고가 존재하지 않음 (`job posting not found`)
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -189,9 +186,10 @@ paths:
         - name: keyword
           in: query
           required: true
-          description: 회사명 prefix 검색어. 빈 값이면 400 (`keyword is required`)
+          description: 회사명 prefix 검색어 (비어 있으면 400)
           schema:
             type: string
+            minLength: 1
       responses:
         '200':
           description: 회사 목록
@@ -278,11 +276,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
-          description: 해당 스크랩이 존재하지 않음 (`Scrap job not found`)
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -345,11 +339,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
-          description: 해당 스크랩이 존재하지 않음 (`Scrap job not found`)
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
     delete:
@@ -370,11 +360,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
-          description: 해당 스크랩이 존재하지 않음 (`Scrap job not found`)
-          content:
-            text/plain:
-              schema:
-                type: string
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -522,9 +508,10 @@ paths:
         - name: companyName
           in: query
           required: true
-          description: 회사명. 빈 값이면 400 (`companyName is required`)
+          description: 회사명 (비어 있으면 400)
           schema:
             type: string
+            minLength: 1
         - name: page
           in: query
           required: false
@@ -551,19 +538,11 @@ paths:
                 items:
                   $ref: '#/components/schemas/Review'
         '400':
-          description: 요청 파라미터 불량
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/UnauthorizedToken'
         '500':
-          description: 서버 내부 오류
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/InternalServerError'
 
 components:
   securitySchemes:
@@ -607,36 +586,42 @@ components:
 
   responses:
     BadRequest:
-      description: 요청 파라미터 불량 (본문은 오류 메시지)
+      description: 요청 파라미터·본문 불량
       content:
-        text/plain:
+        application/json:
           schema:
-            type: string
+            $ref: '#/components/schemas/ErrorResponse'
     Unauthorized:
-      description: 로그인 필요 (`Unauthorized`)
+      description: |
+        로그인 필요. (Authorization 헤더가 존재하나 토큰이 무효한 경우에는
+        전역 미들웨어가 본문 없는 401을 반환한다 — 그 경우 본문이 없다.)
       content:
-        text/plain:
+        application/json:
           schema:
-            type: string
+            $ref: '#/components/schemas/ErrorResponse'
     UnauthorizedEmpty:
       description: 로그인 필요 (본문 없음)
     UnauthorizedToken:
       description: Authorization 헤더가 존재하나 토큰이 무효(만료 등) (본문 없음)
     Forbidden:
       description: 필요 권한 없음 (본문 없음)
-    InternalServerError:
-      description: 서버 내부 오류 (`Internal Server Error`)
+    NotFound:
+      description: 대상이 존재하지 않음
       content:
-        text/plain:
+        application/json:
           schema:
-            type: string
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalServerError:
+      description: 서버 내부 오류
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
 
   schemas:
     ErrorResponse:
       type: object
-      description: |
-        구조화 에러 응답 — strict 전환된 엔드포인트의 에러 계약.
-        미전환 엔드포인트는 아직 text/plain(`http.Error`)을 반환한다(전환 시 이 스키마로 수렴).
+      description: 구조화 에러 응답 — 전 엔드포인트 공통 에러 계약 (본문 없는 미들웨어 401/403/500 제외)
       required:
         - message
       properties:
