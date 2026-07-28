@@ -15,10 +15,6 @@ func badRequest400[T ~struct{ api.BadRequestJSONResponse }](message string) T {
 	return T{api.BadRequestJSONResponse{Message: message}}
 }
 
-func unauthorized401[T ~struct{ api.UnauthorizedJSONResponse }]() T {
-	return T{api.UnauthorizedJSONResponse{Message: messageUnauthorized}}
-}
-
 func notFound404[T ~struct{ api.NotFoundJSONResponse }](message string) T {
 	return T{api.NotFoundJSONResponse{Message: message}}
 }

@@ -17,14 +17,16 @@ func matchJobToken(t *testing.T) string {
 }
 
 func TestMatchJobStrict_Authority(t *testing.T) {
-	// AC: CheckHasAuthority 권한 검사가 전환 후에도 동작한다 (401/403 경로 · 본문 없음 유지)
+	// AC: 권한 검사 401/403에 ErrorResponse 본문이 붙는다 — 원인 미노출 일반 문구.
+	// 비로그인 401은 명세 security 기반 미들웨어가, 403은 requireAuthorityMW가 발신한다.
 	cases := []struct {
-		name       string
-		token      string
-		wantStatus int
+		name        string
+		token       string
+		wantStatus  int
+		wantMessage string
 	}{
-		{name: "비로그인 → 401", token: "", wantStatus: http.StatusUnauthorized},
-		{name: "권한 없는 토큰 → 403", token: "no-authority", wantStatus: http.StatusForbidden},
+		{name: "비로그인 → 401", token: "", wantStatus: http.StatusUnauthorized, wantMessage: "Unauthorized"},
+		{name: "권한 없는 토큰 → 403", token: "no-authority", wantStatus: http.StatusForbidden, wantMessage: "Forbidden"},
 	}
 
 	endpoints := []struct {
@@ -52,7 +54,9 @@ func TestMatchJobStrict_Authority(t *testing.T) {
 			for _, ep := range endpoints {
 				resp, body := doRequest(t, ep.method, server.URL+ep.path, token, ep.body)
 				assert.Equal(t, tc.wantStatus, resp.StatusCode, "%s %s — body: %s", ep.method, ep.path, body)
-				assert.Empty(t, body, "%s %s — 본문 없음 유지", ep.method, ep.path)
+				var errResp api.ErrorResponse
+				require.NoError(t, json.Unmarshal(body, &errResp), "%s %s — body: %s", ep.method, ep.path, body)
+				assert.Equal(t, tc.wantMessage, errResp.Message, "%s %s", ep.method, ep.path)
 			}
 		})
 	}

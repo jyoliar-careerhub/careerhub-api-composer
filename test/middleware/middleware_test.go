@@ -1,24 +1,29 @@
 package middleware
 
 import (
-	"fmt"
+	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
+	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/api"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/jwtresolver"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/middleware"
 	"github.com/jae2274/goutils/mw/httpmw"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestMiddleware(t *testing.T) {
+// SetClaimsMW 단위 테스트 — claims 주입과 무효 토큰 401(원인 불문 · ErrorResponse JSON).
+// 로그인 필수·권한 검사는 미들웨어 함수가 아니라 명세 기반 배선의 관할이다(계약 테스트가 고정).
+func TestSetClaimsMW(t *testing.T) {
 	secretKey := "just a secret key"
-	port := 33333
-	rootURL := fmt.Sprintf("http://localhost:%d", port)
+	server := initServer(secretKey)
+	defer server.Close()
 
 	getBody := func(res *http.Response) string {
 		body, err := io.ReadAll(res.Body)
@@ -26,181 +31,69 @@ func TestMiddleware(t *testing.T) {
 		return string(body)
 	}
 
-	t.Run("don't need jwt", func(t *testing.T) {
-		t.Run("response 'Hello, World!' without jwt", func(t *testing.T) {
-			res, err := initClient(t, secretKey, port).Get(rootURL + "/hello")
-			require.NoError(t, err)
-
-			defer res.Body.Close()
-			require.Equal(t, "Hello, World!", getBody(res))
-		})
-
-		t.Run("response Hello ${userId} with jwt", func(t *testing.T) {
-			req, err := http.NewRequest("GET", rootURL+"/hello", nil)
-			require.NoError(t, err)
-			req.Header.Set("Authorization", createAccessToken(t, secretKey, "Jyo Liar", []string{}))
-
-			res, err := initClient(t, secretKey, port).Do(req)
-			require.NoError(t, err)
-
-			defer res.Body.Close()
-			require.Equal(t, "Hello, Jyo Liar!", getBody(res))
-		})
+	t.Run("토큰 없음 — 통과, claims 미주입", func(t *testing.T) {
+		res, err := http.Get(server.URL + "/hello")
+		require.NoError(t, err)
+		defer res.Body.Close()
+		require.Equal(t, "Hello, World!", getBody(res))
 	})
 
-	t.Run("need login", func(t *testing.T) {
-		t.Run("response 401 without jwt", func(t *testing.T) {
-			res, err := initClient(t, secretKey, port).Get(rootURL + "/my")
-			require.NoError(t, err)
-			defer res.Body.Close()
+	t.Run("유효 토큰 — claims 주입", func(t *testing.T) {
+		req, err := http.NewRequest("GET", server.URL+"/hello", nil)
+		require.NoError(t, err)
+		req.Header.Set("Authorization", createAccessToken(t, secretKey, "Jyo Liar", []string{}))
 
-			require.Equal(t, http.StatusUnauthorized, res.StatusCode)
-			require.Equal(t, "", getBody(res))
-		})
-
-		t.Run("response 200 with jwt", func(t *testing.T) {
-			req, err := http.NewRequest("GET", rootURL+"/my", nil)
-			require.NoError(t, err)
-			req.Header.Set("Authorization", createAccessToken(t, secretKey, "Jyo Liar", []string{}))
-
-			res, err := initClient(t, secretKey, port).Do(req)
-			require.NoError(t, err)
-
-			defer res.Body.Close()
-			require.Equal(t, http.StatusOK, res.StatusCode)
-			require.Equal(t, "Hello, Jyo Liar!", getBody(res))
-		})
+		res, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer res.Body.Close()
+		require.Equal(t, "Hello, Jyo Liar!", getBody(res))
 	})
 
-	t.Run("need authority: admin", func(t *testing.T) {
-		t.Run("response 401 without jwt", func(t *testing.T) {
-			res, err := initClient(t, secretKey, port).Get(rootURL + "/admin")
-			require.NoError(t, err)
-			defer res.Body.Close()
+	t.Run("무효 토큰 — 원인 불문 401 + ErrorResponse JSON", func(t *testing.T) {
+		cases := []struct {
+			name  string
+			token string
+		}{
+			{name: "만료", token: createExpiredToken(t, secretKey, "Jyo Liar")},
+			{name: "형식 불량(malformed)", token: "Bearer undefined"},
+			{name: "서명 불일치", token: createAccessToken(t, "another secret key", "Jyo Liar", []string{})},
+		}
 
-			require.Equal(t, http.StatusUnauthorized, res.StatusCode)
-			require.Equal(t, "", getBody(res))
-		})
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				req, err := http.NewRequest("GET", server.URL+"/hello", nil)
+				require.NoError(t, err)
+				req.Header.Set("Authorization", tc.token)
 
-		t.Run("response 403 with jwt but without authority", func(t *testing.T) {
-			req, err := http.NewRequest("GET", rootURL+"/admin", nil)
-			require.NoError(t, err)
-			req.Header.Set("Authorization", createAccessToken(t, secretKey, "Jyo Liar", []string{}))
-
-			res, err := initClient(t, secretKey, port).Do(req)
-			require.NoError(t, err)
-
-			defer res.Body.Close()
-			require.Equal(t, http.StatusForbidden, res.StatusCode)
-			require.Equal(t, "", getBody(res))
-		})
-
-		t.Run("response 200 with jwt and authority", func(t *testing.T) {
-			req, err := http.NewRequest("GET", rootURL+"/admin", nil)
-			require.NoError(t, err)
-			req.Header.Set("Authorization", createAccessToken(t, secretKey, "Jyo Liar", []string{"admin"}))
-
-			res, err := initClient(t, secretKey, port).Do(req)
-			require.NoError(t, err)
-
-			defer res.Body.Close()
-			require.Equal(t, http.StatusOK, res.StatusCode)
-			require.Equal(t, "Hello, Jyo Liar!", getBody(res))
-		})
-	})
-
-	t.Run("need authority for specify url path: manager", func(t *testing.T) {
-		t.Run("all response 401 without jwt", func(t *testing.T) {
-			testClient := initClient(t, secretKey, port)
-
-			for _, path := range []string{"/manager", "/manager/a", "/manager/a/b", "/manager/a/b/c"} {
-				res, err := testClient.Get(rootURL + path)
+				res, err := http.DefaultClient.Do(req)
 				require.NoError(t, err)
 				defer res.Body.Close()
 
 				require.Equal(t, http.StatusUnauthorized, res.StatusCode)
-				require.Equal(t, "", getBody(res))
-			}
-		})
-
-		t.Run("response 403 with jwt but without authority", func(t *testing.T) {
-			testClient := initClient(t, secretKey, port)
-
-			for _, path := range []string{"/manager", "/manager/a", "/manager/a/b", "/manager/a/b/c"} {
-				req, err := http.NewRequest("GET", rootURL+path, nil)
-				require.NoError(t, err)
-				req.Header.Set("Authorization", createAccessToken(t, secretKey, "Jyo Liar", []string{}))
-
-				res, err := testClient.Do(req)
-				require.NoError(t, err)
-
-				defer res.Body.Close()
-				require.Equal(t, http.StatusForbidden, res.StatusCode)
-				require.Equal(t, "", getBody(res))
-			}
-		})
-
-		t.Run("response 200 with jwt and authority", func(t *testing.T) {
-			testClient := initClient(t, secretKey, port)
-
-			for _, path := range []string{"/manager", "/manager/a", "/manager/a/b", "/manager/a/b/c"} {
-				req, err := http.NewRequest("GET", rootURL+path, nil)
-				require.NoError(t, err)
-				req.Header.Set("Authorization", createAccessToken(t, secretKey, "Jyo Liar", []string{"manager"}))
-
-				res, err := testClient.Do(req)
-				require.NoError(t, err)
-
-				defer res.Body.Close()
-				require.Equal(t, http.StatusOK, res.StatusCode)
-				require.Equal(t, "Hello, Jyo Liar!", getBody(res))
-			}
-		})
+				assert.Equal(t, "application/json", res.Header.Get("Content-Type"))
+				var errResp api.ErrorResponse
+				require.NoError(t, json.NewDecoder(res.Body).Decode(&errResp))
+				assert.Equal(t, "Unauthorized", errResp.Message, "원인 미노출 일반 문구")
+			})
+		}
 	})
-
 }
 
-func initRouter() *mux.Router {
-	jr := jwtresolver.NewJwtResolver("just a secret key")
-	commonHandleFunc := func(w http.ResponseWriter, r *http.Request) {
+func initServer(secretKey string) *httptest.Server {
+	jr := jwtresolver.NewJwtResolver(secretKey)
+
+	router := mux.NewRouter()
+	router.Use(httpmw.SetTraceIdMW(), middleware.SetClaimsMW(jr))
+	router.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
 		claims, ok := middleware.GetClaims(r.Context())
 		if ok {
 			w.Write([]byte("Hello, " + claims.UserId + "!"))
 			return
 		}
 		w.Write([]byte("Hello, World!"))
-	}
+	})
 
-	router := mux.NewRouter()
-	router.Use(httpmw.SetTraceIdMW(), middleware.SetClaimsMW(jr))
-	router.HandleFunc("/hello", commonHandleFunc)
-
-	myRouter := router.PathPrefix("/my").Subrouter()
-	myRouter.Use(middleware.CheckJustLoggedIn)
-	myRouter.HandleFunc("", commonHandleFunc)
-
-	adminRouter := router.PathPrefix("/admin").Subrouter()
-	adminRouter.Use(middleware.CheckHasAuthority("admin"))
-	adminRouter.HandleFunc("", commonHandleFunc)
-
-	managerRouter := router.PathPrefix("/manager").Subrouter()
-	managerRouter.Use(middleware.CheckHasAuthority("manager"))
-	managerRouter.HandleFunc("", commonHandleFunc)
-	managerRouter.HandleFunc("/a", commonHandleFunc)
-	managerRouter.HandleFunc("/a/b", commonHandleFunc)
-	managerRouter.HandleFunc("/a/b/c", commonHandleFunc)
-
-	return router
-}
-
-func initClient(t *testing.T, secretKey string, port int) *http.Client {
-	router := initRouter()
-
-	go func() {
-		http.ListenAndServe(fmt.Sprintf(":%d", port), router)
-	}()
-
-	return &http.Client{}
+	return httptest.NewServer(router)
 }
 
 func createAccessToken(t *testing.T, secretKey, userId string, authorities []string) string {
@@ -211,11 +104,29 @@ func createAccessToken(t *testing.T, secretKey, userId string, authorities []str
 			UserId:      userId,
 			Authorities: authorities,
 			RegisteredClaims: jwt.RegisteredClaims{
-				Issuer:    "careerhub.jyo-liar.com",                    //TODO: 임의 설정
-				Audience:  []string{"careerhub.jyo-liar.com"},          //TODO: 임의 설정
-				ExpiresAt: jwt.NewNumericDate(now.Add(30 * time.Hour)), //TODO: 임의 설정
+				Issuer:    "careerhub.jyo-liar.com",
+				Audience:  []string{"careerhub.jyo-liar.com"},
+				ExpiresAt: jwt.NewNumericDate(now.Add(30 * time.Hour)),
 				IssuedAt:  jwt.NewNumericDate(now),
 				NotBefore: jwt.NewNumericDate(now),
+			},
+		},
+	).SignedString([]byte(secretKey))
+
+	require.NoError(t, err)
+
+	return accessToken
+}
+
+func createExpiredToken(t *testing.T, secretKey, userId string) string {
+	now := time.Now()
+
+	accessToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256,
+		&jwtresolver.CustomClaims{
+			UserId: userId,
+			RegisteredClaims: jwt.RegisteredClaims{
+				ExpiresAt: jwt.NewNumericDate(now.Add(-time.Hour)),
+				IssuedAt:  jwt.NewNumericDate(now.Add(-2 * time.Hour)),
 			},
 		},
 	).SignedString([]byte(secretKey))

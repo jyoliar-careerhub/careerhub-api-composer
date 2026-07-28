@@ -58,8 +58,9 @@ HTTP 요청 → Gorilla Mux Router → Middleware(TraceID, JWT) → Controller �
 
 - **비동기 데이터 보강**: `goutils/cchan/async.ExecAsync()`를 사용하여 gRPC 호출을 병렬 실행. 보강 데이터(리뷰, 스크랩) 로딩 실패 시에도 부분 응답을 반환한다.
 - **쿼리 인코딩**: 복잡한 검색 쿼리는 base64로 인코딩하여 요청 파라미터로 전달
-- **인증**: `Authorization: Bearer {token}` 헤더에서 JWT 파싱. Claims에 userId와 authorities 포함
-- **권한 검사**: `middleware.CheckHasAuthority()`로 라우터 단위 권한 검사. 현재 MatchJob만 권한 필요 (`AUTHORITY_MATCH_JOB`)
+- **인증**: `Authorization: Bearer {token}` 헤더에서 JWT 파싱. Claims에 userId와 authorities 포함. 무효 토큰은 원인 불문 401 + `ErrorResponse` JSON (RFC 6750)
+- **로그인 필수 검사**: 명세의 `security` 선언이 원천 — 명세 검증 미들웨어의 `AuthenticationFunc`가 claims 존재를 확인. `{}` 대안 선언 연산은 비로그인 허용
+- **권한 검사**: 생성 배선의 `requireAuthorityMW`(operationID 단위). 현재 MatchJob만 권한 필요 (`AUTHORITY_MATCH_JOB`)
 
 ### 라우터 구조
 

@@ -112,7 +112,7 @@ func TestReviewStrict_Auth(t *testing.T) {
 		assert.Equal(t, "test-user", f.review.capture.claims.UserId)
 	})
 
-	t.Run("만료 토큰이면 미들웨어가 401로 끊는다(기존 동작 유지)", func(t *testing.T) {
+	t.Run("만료 토큰이면 미들웨어가 401로 끊는다 (ErrorResponse JSON)", func(t *testing.T) {
 		f := newFakes()
 		server, _ := newStrictTestServer(t, f)
 
@@ -121,8 +121,7 @@ func TestReviewStrict_Auth(t *testing.T) {
 
 		resp, body := doRequest(t, http.MethodGet, server.URL+"/api/company-review/reviews?companyName=acme", tokens.AccessToken, nil)
 
-		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.Empty(t, body)
+		requireUnauthorizedJSON(t, resp, body)
 		assert.Nil(t, f.review.gotReviews)
 	})
 }

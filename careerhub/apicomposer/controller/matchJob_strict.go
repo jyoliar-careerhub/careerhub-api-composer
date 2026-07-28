@@ -9,13 +9,12 @@ import (
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/middleware"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/userinfo"
 	"github.com/jae2274/goutils/llog"
-	"github.com/jae2274/goutils/terr"
 )
 
 // MatchJobStrictController — 전환 패턴은 review_strict.go 참고.
-// 권한(AUTHORITY_MATCH_JOB) 검사는 여기가 아니라 배선의 권한 미들웨어가 한다
-// (strict.go의 authorityMiddleware — 기존 CheckHasAuthority의 라우터 단위 검사를
-// operationID 단위로 옮긴 것). 여기의 claims 부재 401은 방어적 검사다(기존과 동일).
+// 로그인 검사는 명세 security 기반 AuthenticationFunc가, 권한(AUTHORITY_MATCH_JOB) 검사는
+// 배선의 권한 미들웨어(strict.go의 requireAuthorityMW)가 한다 — 여기 도달 시 claims는
+// 항상 존재하고, 핸들러는 UserId 사용을 위해 조회만 한다.
 type MatchJobStrictController struct {
 	matchJobSvc userinfo.MatchJobService
 }
@@ -28,11 +27,7 @@ func NewMatchJobStrictController(matchJobSvc userinfo.MatchJobService) *MatchJob
 const conditionLimitCount = 2
 
 func (c *MatchJobStrictController) FindMatchJob(ctx context.Context, request api.FindMatchJobRequestObject) (api.FindMatchJobResponseObject, error) {
-	claims, ok := middleware.GetClaims(ctx)
-	if !ok {
-		llog.LogErr(ctx, terr.New("No claims in context"))
-		return api.FindMatchJob401Response{}, nil
-	}
+	claims, _ := middleware.GetClaims(ctx)
 
 	matchJob, err := c.matchJobSvc.FindMatchJob(ctx, claims.UserId)
 	if err != nil {
@@ -94,11 +89,7 @@ func convertQueryToAPI(q *query.Query) api.Query {
 }
 
 func (c *MatchJobStrictController) AddMatchJobCondition(ctx context.Context, request api.AddMatchJobConditionRequestObject) (api.AddMatchJobConditionResponseObject, error) {
-	claims, ok := middleware.GetClaims(ctx)
-	if !ok {
-		llog.LogErr(ctx, terr.New("No claims in context"))
-		return api.AddMatchJobCondition401Response{}, nil
-	}
+	claims, _ := middleware.GetClaims(ctx)
 
 	res, err := c.matchJobSvc.AddCondition(ctx, claims.UserId, conditionLimitCount, &userinfo.AddConditionRequest{
 		ConditionName: request.Body.ConditionName,
@@ -146,11 +137,7 @@ func convertAPIQueryToDomain(q api.Query) *query.Query {
 }
 
 func (c *MatchJobStrictController) UpdateMatchJobCondition(ctx context.Context, request api.UpdateMatchJobConditionRequestObject) (api.UpdateMatchJobConditionResponseObject, error) {
-	claims, ok := middleware.GetClaims(ctx)
-	if !ok {
-		llog.LogErr(ctx, terr.New("No claims in context"))
-		return api.UpdateMatchJobCondition401Response{}, nil
-	}
+	claims, _ := middleware.GetClaims(ctx)
 
 	res, err := c.matchJobSvc.UpdateCondition(ctx, claims.UserId, &userinfo.UpdateConditionRequest{
 		ConditionId:   request.Body.ConditionId,
@@ -166,11 +153,7 @@ func (c *MatchJobStrictController) UpdateMatchJobCondition(ctx context.Context, 
 }
 
 func (c *MatchJobStrictController) DeleteMatchJobCondition(ctx context.Context, request api.DeleteMatchJobConditionRequestObject) (api.DeleteMatchJobConditionResponseObject, error) {
-	claims, ok := middleware.GetClaims(ctx)
-	if !ok {
-		llog.LogErr(ctx, terr.New("No claims in context"))
-		return api.DeleteMatchJobCondition401Response{}, nil
-	}
+	claims, _ := middleware.GetClaims(ctx)
 
 	res, err := c.matchJobSvc.DeleteCondition(ctx, claims.UserId, request.Body.ConditionId)
 	if err != nil {
@@ -182,11 +165,7 @@ func (c *MatchJobStrictController) DeleteMatchJobCondition(ctx context.Context, 
 }
 
 func (c *MatchJobStrictController) UpdateAgreeToMail(ctx context.Context, request api.UpdateAgreeToMailRequestObject) (api.UpdateAgreeToMailResponseObject, error) {
-	claims, ok := middleware.GetClaims(ctx)
-	if !ok {
-		llog.LogErr(ctx, terr.New("No claims in context"))
-		return api.UpdateAgreeToMail401Response{}, nil
-	}
+	claims, _ := middleware.GetClaims(ctx)
 
 	res, err := c.matchJobSvc.UpdateAgreeToMail(ctx, claims.UserId, request.Body.AgreeToMail)
 	if err != nil {

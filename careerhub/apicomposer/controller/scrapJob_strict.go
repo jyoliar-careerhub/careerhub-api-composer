@@ -8,7 +8,6 @@ import (
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/userinfo"
 	scrapGrpc "github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/userinfo/restapi_grpc"
 	"github.com/jae2274/goutils/llog"
-	"github.com/jae2274/goutils/terr"
 )
 
 // ScrapJobStrictController — 전환 패턴은 review_strict.go 참고.
@@ -16,6 +15,8 @@ import (
 // 디코드 실패는 배선의 RequestErrorHandlerFunc가 ErrorResponse 400으로 응답한다
 // (기존 손 핸들러의 500은 에러 계약 개정으로 폐기).
 // 요청 본문의 userId 필드는 명세에 없다 — 항상 토큰의 userId를 쓴다(기존 덮어쓰기와 동일 결과).
+// 로그인 검사는 명세 security 기반 AuthenticationFunc가 한다 — 여기 도달 시 claims는 항상
+// 존재하고, 핸들러는 UserId 사용을 위해 조회만 한다.
 type ScrapJobStrictController struct {
 	scrapJobSvc *userinfo.ScrapJobService
 }
@@ -24,15 +25,10 @@ func NewScrapJobStrictController(scrapJobSvc *userinfo.ScrapJobService) *ScrapJo
 	return &ScrapJobStrictController{scrapJobSvc: scrapJobSvc}
 }
 
-const messageUnauthorized = "Unauthorized"
 const messageScrapJobNotFound = "Scrap job not found"
 
 func (c *ScrapJobStrictController) GetScrapJobs(ctx context.Context, request api.GetScrapJobsRequestObject) (api.GetScrapJobsResponseObject, error) {
-	claims, ok := middleware.GetClaims(ctx)
-	if !ok {
-		llog.LogErr(ctx, terr.New("No claims in context"))
-		return unauthorized401[api.GetScrapJobs401JSONResponse](), nil
-	}
+	claims, _ := middleware.GetClaims(ctx)
 
 	jobPostings, err := c.scrapJobSvc.GetScrapJobs(ctx, claims, request.Params.Tag)
 	if err != nil {
@@ -44,11 +40,7 @@ func (c *ScrapJobStrictController) GetScrapJobs(ctx context.Context, request api
 }
 
 func (c *ScrapJobStrictController) AddScrapJob(ctx context.Context, request api.AddScrapJobRequestObject) (api.AddScrapJobResponseObject, error) {
-	claims, ok := middleware.GetClaims(ctx)
-	if !ok {
-		llog.LogErr(ctx, terr.New("No claims in context"))
-		return unauthorized401[api.AddScrapJob401JSONResponse](), nil
-	}
+	claims, _ := middleware.GetClaims(ctx)
 
 	err := c.scrapJobSvc.AddScrapJob(ctx, &scrapGrpc.AddScrapJobRequest{
 		UserId:    claims.UserId,
@@ -64,11 +56,7 @@ func (c *ScrapJobStrictController) AddScrapJob(ctx context.Context, request api.
 }
 
 func (c *ScrapJobStrictController) RemoveScrapJob(ctx context.Context, request api.RemoveScrapJobRequestObject) (api.RemoveScrapJobResponseObject, error) {
-	claims, ok := middleware.GetClaims(ctx)
-	if !ok {
-		llog.LogErr(ctx, terr.New("No claims in context"))
-		return unauthorized401[api.RemoveScrapJob401JSONResponse](), nil
-	}
+	claims, _ := middleware.GetClaims(ctx)
 
 	isExisted, err := c.scrapJobSvc.RemoveScrapJob(ctx, &scrapGrpc.RemoveScrapJobRequest{
 		UserId:    claims.UserId,
@@ -87,11 +75,7 @@ func (c *ScrapJobStrictController) RemoveScrapJob(ctx context.Context, request a
 }
 
 func (c *ScrapJobStrictController) GetUntaggedScrapJobs(ctx context.Context, request api.GetUntaggedScrapJobsRequestObject) (api.GetUntaggedScrapJobsResponseObject, error) {
-	claims, ok := middleware.GetClaims(ctx)
-	if !ok {
-		llog.LogErr(ctx, terr.New("No claims in context"))
-		return unauthorized401[api.GetUntaggedScrapJobs401JSONResponse](), nil
-	}
+	claims, _ := middleware.GetClaims(ctx)
 
 	scrapJobs, err := c.scrapJobSvc.GetUntaggedScrapJobs(ctx, claims.UserId)
 	if err != nil {
@@ -119,11 +103,7 @@ func convertScrapJobsToAPI(scrapJobs []*scrapGrpc.ScrapJob) []api.ScrapJob {
 }
 
 func (c *ScrapJobStrictController) GetScrapTags(ctx context.Context, request api.GetScrapTagsRequestObject) (api.GetScrapTagsResponseObject, error) {
-	claims, ok := middleware.GetClaims(ctx)
-	if !ok {
-		llog.LogErr(ctx, terr.New("No claims in context"))
-		return unauthorized401[api.GetScrapTags401JSONResponse](), nil
-	}
+	claims, _ := middleware.GetClaims(ctx)
 
 	res, err := c.scrapJobSvc.GetScrapTags(ctx, claims.UserId)
 	if err != nil {
@@ -135,11 +115,7 @@ func (c *ScrapJobStrictController) GetScrapTags(ctx context.Context, request api
 }
 
 func (c *ScrapJobStrictController) AddScrapTag(ctx context.Context, request api.AddScrapTagRequestObject) (api.AddScrapTagResponseObject, error) {
-	claims, ok := middleware.GetClaims(ctx)
-	if !ok {
-		llog.LogErr(ctx, terr.New("No claims in context"))
-		return unauthorized401[api.AddScrapTag401JSONResponse](), nil
-	}
+	claims, _ := middleware.GetClaims(ctx)
 
 	isExisted, err := c.scrapJobSvc.AddTag(ctx, &scrapGrpc.AddTagRequest{
 		UserId:    claims.UserId,
@@ -159,11 +135,7 @@ func (c *ScrapJobStrictController) AddScrapTag(ctx context.Context, request api.
 }
 
 func (c *ScrapJobStrictController) RemoveScrapTag(ctx context.Context, request api.RemoveScrapTagRequestObject) (api.RemoveScrapTagResponseObject, error) {
-	claims, ok := middleware.GetClaims(ctx)
-	if !ok {
-		llog.LogErr(ctx, terr.New("No claims in context"))
-		return unauthorized401[api.RemoveScrapTag401JSONResponse](), nil
-	}
+	claims, _ := middleware.GetClaims(ctx)
 
 	isExisted, err := c.scrapJobSvc.RemoveTag(ctx, &scrapGrpc.RemoveTagRequest{
 		UserId:    claims.UserId,
