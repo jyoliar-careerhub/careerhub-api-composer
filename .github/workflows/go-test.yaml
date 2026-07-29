@@ -1,7 +1,9 @@
 name: Go test
 
-# 계약 테스트를 머지 게이트로 — 전체 go test를 PR·prod/dev push에서 실행한다.
-# fake 기반이라 실 업스트림이 불필요하고, test.env 없이 돈다(make test의 더미 기본값).
+# 머지 게이트 — 한 job에서 순차 실행한다:
+#   ① 명세 신선도(재생성 diff) ② 빌드 ③ 전체 go test
+# 앞 step이 실패하면 뒤는 실행되지 않는다 (freshness 깨짐 → test 생략).
+# 테스트는 fake 기반이라 실 업스트림 불필요, test.env 없이 돈다(make test의 더미 기본값).
 # 근거: jyoliar-lab/ops-workflow#20
 on:
   pull_request:
@@ -19,6 +21,17 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+
+      - name: Regenerate from spec
+        run: make openapi
+
+      - name: Fail on drift between spec and generated code
+        run: |
+          git diff --exit-code -- careerhub/apicomposer/api/ \
+            || { echo "::error::openapi.yaml과 api.gen.go가 어긋났습니다. 'make openapi' 실행 후 결과를 커밋하세요."; exit 1; }
+
+      - name: Build
+        run: go build ./...
 
       - name: Test
         run: make test
