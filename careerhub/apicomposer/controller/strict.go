@@ -2,7 +2,7 @@ package controller
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/getkin/kin-openapi/openapi3filter"
@@ -44,7 +44,7 @@ func NewStrictServer(
 // 에러 계약: 생성 코드가 잡는 오류(파라미터 바인딩·본문 디코드 실패 등)도 핸들러 밖 오류도
 // 전부 명세의 ErrorResponse(application/json)로 나간다 — 기본 핸들러(http.Error, text/plain)를 쓰지 않는다.
 // 권한: matchJob 연산에는 기존 CheckHasAuthority(라우터 단위)를 operationID 단위로 옮긴
-// 권한 미들웨어가 걸린다 — 401/403 응답 형태(본문 없음)는 기존 미들웨어와 동일하다.
+// 권한 미들웨어가 걸린다 — 401/403도 ErrorResponse(JSON)다.
 func NewStrictHTTPHandler(ssi api.StrictServerInterface, baseRouter *mux.Router) http.Handler {
 	si := api.NewStrictHandlerWithOptions(ssi,
 		[]api.StrictMiddlewareFunc{
@@ -64,7 +64,10 @@ func NewStrictHTTPHandler(ssi api.StrictServerInterface, baseRouter *mux.Router)
 // 필수 누락·타입 불일치·minimum/maximum 위반이 핸들러 도달 전에 ErrorResponse 400으로
 // 거부된다 — 검증 규칙의 원천이 명세 하나로 수렴한다(strict 구현에는 명세로 표현 불가한
 // 검증만 남는다). rootPath는 배포 prefix(ROOT_PATH) — 명세 경로와 대조 전에 잘라낸다.
-// 인증·권한은 이 미들웨어의 관할이 아니다(기존 미들웨어 체인이 한다).
+// 로그인 필수 검사도 여기서 한다: 명세의 security 선언(bearerAuth)이 원천이고,
+// openapi3filter가 요구 연산에서만 AuthenticationFunc를 호출한다 — SetClaimsMW가 앞서
+// 주입한 claims의 존재만 확인하면 되고, `{}` 대안이 선언된 공개 연산은 자동 통과한다.
+// 새 보호 엔드포인트는 명세에 security 선언만 하면 자동 적용된다.
 func NewSpecValidationMW(rootPath string) (mux.MiddlewareFunc, error) {
 	swagger, err := api.GetSpec()
 	if err != nil {
@@ -75,18 +78,32 @@ func NewSpecValidationMW(rootPath string) (mux.MiddlewareFunc, error) {
 		DoNotValidateServers: true,
 		Prefix:               rootPath,
 		Options: openapi3filter.Options{
-			AuthenticationFunc: openapi3filter.NoopAuthenticationFunc,
+			AuthenticationFunc: requireLoginAuthenticationFunc,
 		},
 		ErrorHandler: func(w http.ResponseWriter, message string, statusCode int) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(statusCode)
-			_ = json.NewEncoder(w).Encode(api.ErrorResponse{Message: message})
+			// 401은 원인 미노출 일반 문구로 고정한다 — openapi3filter의
+			// SecurityRequirementsError 문자열을 그대로 내보내지 않는다.
+			if statusCode == http.StatusUnauthorized {
+				message = middleware.MessageUnauthorized
+			}
+			middleware.WriteError(w, statusCode, message)
 		},
 	})
 	return mux.MiddlewareFunc(validator), nil
 }
 
+// requireLoginAuthenticationFunc — 명세가 bearerAuth를 요구하는 연산의 로그인 검사.
+// 토큰의 유효성은 SetClaimsMW가 이미 판정했으므로(무효면 여기 도달 전에 401),
+// ctx에 claims가 있는지만 본다.
+func requireLoginAuthenticationFunc(ctx context.Context, input *openapi3filter.AuthenticationInput) error {
+	if _, ok := middleware.GetClaims(ctx); !ok {
+		return errors.New(middleware.MessageUnauthorized)
+	}
+	return nil
+}
+
 const messageInternalServerError = "Internal Server Error"
+const messageForbidden = "Forbidden"
 
 // matchJobOperations — AUTHORITY_MATCH_JOB이 필요한 연산(operationId의 생성명).
 // 명세의 match-job 태그 그룹과 일치해야 한다.
@@ -99,7 +116,8 @@ var matchJobOperations = map[string]bool{
 }
 
 // requireAuthorityMW는 지정 연산에만 권한을 요구하는 strict 미들웨어다.
-// 응답은 기존 CheckHasAuthority와 동일: 401/403 모두 본문 없음.
+// 401/403 모두 ErrorResponse(JSON)다. 401 분기는 방어적이다 — 로그인 필수 검사는
+// 명세 security 기반의 AuthenticationFunc가 먼저 끊는다.
 func requireAuthorityMW(authority string, operationIDs map[string]bool) api.StrictMiddlewareFunc {
 	return func(f api.StrictHandlerFunc, operationID string) api.StrictHandlerFunc {
 		if !operationIDs[operationID] {
@@ -108,11 +126,11 @@ func requireAuthorityMW(authority string, operationIDs map[string]bool) api.Stri
 		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error) {
 			claims, ok := middleware.GetClaims(ctx)
 			if !ok {
-				w.WriteHeader(http.StatusUnauthorized)
+				middleware.WriteError(w, http.StatusUnauthorized, middleware.MessageUnauthorized)
 				return nil, nil
 			}
 			if !claims.HasAuthority(authority) {
-				w.WriteHeader(http.StatusForbidden)
+				middleware.WriteError(w, http.StatusForbidden, messageForbidden)
 				return nil, nil
 			}
 			return f(ctx, w, r, request)
@@ -122,8 +140,6 @@ func requireAuthorityMW(authority string, operationIDs map[string]bool) api.Stri
 
 func writeErrorResponse(status int) func(w http.ResponseWriter, r *http.Request, err error) {
 	return func(w http.ResponseWriter, r *http.Request, err error) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(api.ErrorResponse{Message: err.Error()})
+		middleware.WriteError(w, status, err.Error())
 	}
 }

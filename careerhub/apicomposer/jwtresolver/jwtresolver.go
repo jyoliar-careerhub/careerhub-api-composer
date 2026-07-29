@@ -2,13 +2,10 @@ package jwtresolver
 
 import (
 	"errors"
-	"net/http"
-	"slices"
 	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/gorilla/mux"
 	"github.com/jae2274/goutils/terr"
 	"gopkg.in/validator.v2"
 )
@@ -128,33 +125,4 @@ func (j *JwtResolver) Validate(claims *CustomClaims) error {
 	}
 
 	return j.validator.Validate(claims)
-}
-
-func (j *JwtResolver) CheckHasAuthority(authority string) mux.MiddlewareFunc {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			tokenString := r.Header.Get("Authorization")
-			if tokenString == "" {
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			}
-
-			tokenString = strings.Replace(tokenString, "Bearer ", "", 1)
-			claims, isValid, err := j.ParseToken(tokenString)
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			if !isValid {
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			}
-
-			if slices.Contains(claims.Authorities, authority) {
-				next.ServeHTTP(w, r)
-			} else {
-				w.WriteHeader(http.StatusForbidden)
-			}
-		})
-	}
 }
