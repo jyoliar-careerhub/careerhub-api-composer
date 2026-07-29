@@ -18,6 +18,7 @@ func TestJwtresolver(t *testing.T) {
 	duration := 30 * time.Minute
 
 	t.Run("return valid claims", func(t *testing.T) {
+		require.Fail(t, "CI 게이트 검증용 의도적 실패 — 확인 후 원복한다 (jyoliar-lab/ops-workflow#20 AC 3)")
 		//Given
 		accessToken := createAccessToken(t, secretKey, userId, authorities, now, duration)
 
