@@ -1,7 +1,10 @@
-name: OpenAPI freshness
+name: Go test
 
-# 명세(openapi.yaml)와 생성물(api.gen.go)의 불일치를 거부하는 게이트.
-# 재생성 후 diff가 나면 실패한다 — 로컬에서 `make openapi`를 돌려 커밋할 것.
+# 머지 게이트 — 한 job에서 순차 실행한다:
+#   ① 명세 신선도(재생성 diff) ② 빌드 ③ 전체 go test
+# 앞 step이 실패하면 뒤는 실행되지 않는다 (freshness 깨짐 → test 생략).
+# 테스트는 fake 기반이라 실 업스트림 불필요, test.env 없이 돈다(make test의 더미 기본값).
+# 근거: jyoliar-lab/ops-workflow#20
 on:
   pull_request:
   push:
@@ -10,12 +13,12 @@ on:
       - dev
 
 jobs:
-  freshness:
+  test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
@@ -29,3 +32,6 @@ jobs:
 
       - name: Build
         run: go build ./...
+
+      - name: Test
+        run: make test
