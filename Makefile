@@ -51,8 +51,16 @@ openapi:
 	@cd careerhub/apicomposer/api && go tool oapi-codegen --config oapi-codegen.yaml openapi.yaml
 
 ## test: runs all tests
-test:	
+# fake 기반 테스트라 실 업스트림이 불필요하다 — test.env가 없으면 더미 기본값으로 돈다 (CI 포함)
+# .PHONY 없으면 test/ 디렉터리를 타겟 산출물로 오인해 스킵된다
+.PHONY: test
+test: POSTING_GRPC_ENDPOINT ?= localhost:1
+test: USERINFO_GRPC_ENDPOINT ?= localhost:1
+test: REVIEW_GRPC_ENDPOINT ?= localhost:1
+test: SECRET_KEY ?= test-secret-key
+test: API_PORT ?= 18080
+test:
 	@echo "Testing..."
-	@env POSTING_GRPC_ENDPOINT=${POSTING_GRPC_ENDPOINT} API_PORT=${API_PORT} SECRET_KEY=${SECRET_KEY} REVIEW_GRPC_ENDPOINT=${REVIEW_GRPC_ENDPOINT} go test -p 1 -timeout 60s ./...
+	@env POSTING_GRPC_ENDPOINT=${POSTING_GRPC_ENDPOINT} USERINFO_GRPC_ENDPOINT=${USERINFO_GRPC_ENDPOINT} API_PORT=${API_PORT} SECRET_KEY=${SECRET_KEY} REVIEW_GRPC_ENDPOINT=${REVIEW_GRPC_ENDPOINT} go test -p 1 -timeout 60s ./...
 	
 

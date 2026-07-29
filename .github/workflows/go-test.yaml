@@ -1,0 +1,24 @@
+name: Go test
+
+# 계약 테스트를 머지 게이트로 — 전체 go test를 PR·prod/dev push에서 실행한다.
+# fake 기반이라 실 업스트림이 불필요하고, test.env 없이 돈다(make test의 더미 기본값).
+# 근거: jyoliar-lab/ops-workflow#20
+on:
+  pull_request:
+  push:
+    branches:
+      - prod
+      - dev
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Test
+        run: make test
