@@ -312,6 +312,7 @@ func newStrictTestServer(t *testing.T, f *fakes) (*httptest.Server, *tracetest.S
 		controller.NewScrapJobStrictController(userinfo.NewScrapJobService(f.scrapJob, f.posting, f.review)),
 		controller.NewMatchJobStrictController(userinfo.NewMatchJobService(f.matchJob)),
 		controller.NewReviewStrictController(review.NewReviewService(f.review)),
+		controller.NewMetaStrictController(),
 	)
 	controller.NewStrictHTTPHandler(strictServer, rootRouter)
 

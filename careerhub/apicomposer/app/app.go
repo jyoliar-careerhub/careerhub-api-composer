@@ -130,6 +130,7 @@ func Run(mainCtx context.Context) {
 		controller.NewScrapJobStrictController(scrapJobService),
 		controller.NewMatchJobStrictController(matchJobService),
 		controller.NewReviewStrictController(reviewService),
+		controller.NewMetaStrictController(),
 	)
 	controller.NewStrictHTTPHandler(strictServer, rootRouter)
 

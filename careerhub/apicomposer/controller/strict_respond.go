@@ -24,3 +24,7 @@ func internalError500[T ~struct {
 }]() T {
 	return T{api.InternalServerErrorJSONResponse{Message: messageInternalServerError}}
 }
+
+func notImplemented501[T ~struct{ api.NotImplementedJSONResponse }]() T {
+	return T{api.NotImplementedJSONResponse{Message: messageNotImplemented}}
+}
