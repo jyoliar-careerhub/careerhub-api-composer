@@ -30,7 +30,7 @@ tags:
   - name: company-review
     description: 회사 리뷰 조회 (공개)
   - name: meta
-    description: 계약·서버 메타 정보 (공개)
+    description: 계약·서버 메타 정보 (공개, 인증 불요)
 
 paths:
   /job_postings:
