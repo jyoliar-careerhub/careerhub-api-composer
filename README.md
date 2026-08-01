@@ -22,7 +22,7 @@ REST 계약의 명세는 **`spec/api-composer/openapi.yaml`** 에 있다 (ADR-00
 
 - **좌표 규약: 태그 prefix = 계약이 사는 디렉터리, 파일명은 고정 관례(`openapi.yaml`)** — 좌표에서 파일 위치가 파생된다. 예: 태그 `spec/api-composer/v0.2.0` → 그 태그의 `spec/api-composer/openapi.yaml`. 소비자에게 별도 경로 지식이 필요 없다(gRPC의 Go prefix 태그 규칙과 동형).
 - `openapi.yaml`을 바꾼 머지(prod)마다 CI(`.github/workflows/spec-tag.yaml`)가 `info.version`을 읽어 **`spec/api-composer/v{version}` 태그를 자동 생성**한다. 손 태그는 없다.
-- 따라서 **스펙 변경은 `info.version` 범프를 요구한다** — 같은 버전 태그가 이미 있으면 PR 검사(`check-version-bumped`)와 태그 생성이 실패한다.
+- 따라서 **스펙 변경은 새 공표 좌표를 요구한다** — `info.version`이 이미 공표된 값 그대로면 PR 검사(`check-new-coordinate`)와 태그 생성이 실패한다. 게이트가 지키는 불변식은 **"한 좌표 = 한 스펙 내용"**이다(버전의 증가가 아니라 좌표가 비어 있는지를 본다 — 같은 좌표가 두 내용을 가리키면 소비자의 핀이 거짓말을 하게 된다).
 - 버전은 **좌표일 뿐이다** — semver 의미(비호환=major 등)는 아직 부여하지 않는다(ADR-0021 논의 보류 중). 어느 버전에 올라탈지는 소비자가 자기 저장소의 핀으로 선택한다.
 - 앱 빌드 태그(`v*` → `create-tag.yaml` → ECR)와는 무관하다 — 계약 디렉터리는 `v`로 시작하지 않으므로 `v*`에 매칭되지 않는다. 스펙 디렉터리를 옮기면 태그 prefix도 새 경로를 따른다(경로는 얼지 않는다 — `spec-tag.yaml`의 `SPEC_FILE`과 `paths` 두 곳을 함께 바꾼다).
 
@@ -32,7 +32,7 @@ REST 계약의 명세는 **`spec/api-composer/openapi.yaml`** 에 있다 (ADR-00
 
 **무엇을 stub으로 머지할 수 있나** — 계약(연산의 형태)이 합의된 것 전부. 구현 일정과 무관하다. 머지 묶음은:
 
-1. `openapi.yaml` 변경 — 신규 연산 + 해당 연산에 `'501'`(`NotImplemented`) 응답 선언 + `info.version` 범프
+1. `openapi.yaml` 변경 — 신규 연산 + 해당 연산에 `'501'`(`NotImplemented`) 응답 선언 + 새 공표 좌표(`info.version`)
 2. `make openapi` 재생성물 (`api.gen.go`)
 3. strict 메서드 stub — `notImplemented501[...]` 반환. 미구현 신호도 에러 계약(`ErrorResponse` JSON)을 지킨다. 임베딩 조립(`controller/strict.go`)이 그대로 만족되므로 별도 배선은 없다
 4. stub 응답 테스트(`test/controller/*_strict_test.go`) — 501 + `ErrorResponse` 단언
@@ -42,4 +42,4 @@ REST 계약의 명세는 **`spec/api-composer/openapi.yaml`** 에 있다 (ADR-00
 **구현 완료는 어떻게 확인하는가** — 컴파일이 아니라 **테스트와 사람**이다(ADR-0019). stub을 실 구현으로 바꾸는 PR은:
 
 - 해당 연산의 **동작 테스트**(생성 라우팅 경유)로 stub의 501 테스트를 **대체**한다 — 이 대체가 구현 완료의 기계 확인이다.
-- 명세에서 해당 연산의 `'501'` 선언을 제거하고 `info.version`을 범프한다 — "이 버전부터 구현 서빙을 의도한다"는 계약 변경이므로 새 공표 좌표가 나간다. (배포가 따라오기 전까지 구버전 서버를 만날 수 있음은 소비자 몫의 전제다 — 신호 구분은 `GET /contract/version`으로.)
+- 명세에서 해당 연산의 `'501'` 선언을 제거하고 `info.version`을 올린다 — "이 버전부터 구현 서빙을 의도한다"는 계약 변경이므로 새 공표 좌표가 나간다. (배포가 따라오기 전까지 구버전 서버를 만날 수 있음은 소비자 몫의 전제다 — 신호 구분은 `GET /contract/version`으로.)

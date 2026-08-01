@@ -11,8 +11,10 @@ name: Publish spec tag
 #   분리된다. 계약 디렉터리는 v로 시작하지 않아야 한다(앱 빌드 태그 v*와 불교차 —
 #   create-tag.yaml은 spec/... 태그에 매칭되지 않는다).
 #
-# 게이트: 같은 버전 태그가 이미 있으면 실패 — "버전 미범프 스펙 변경"을 거부한다.
-#   - pull_request의 check-version-bumped: 머지 전에 같은 검사를 미리 돌려 조기에 알린다.
+# 게이트: 같은 버전 태그가 이미 있으면 실패 — 이미 공표된 좌표를 재사용하는 스펙
+#   변경을 거부한다. 지키는 불변식은 "한 좌표 = 한 스펙 내용"이다(버전의 증가가
+#   아니다 — 좌표가 비어 있는지만 본다).
+#   - pull_request의 check-new-coordinate: 머지 전에 같은 검사를 미리 돌려 조기에 알린다.
 #   - push(prod)의 publish-tag: 태그 생성 자체가 최종 게이트다.
 
 env:
@@ -33,7 +35,7 @@ permissions:
   contents: write
 
 jobs:
-  check-version-bumped:
+  check-new-coordinate:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -51,7 +53,7 @@ jobs:
         run: |
           TAG="${{ steps.coord.outputs.tag }}"
           if git ls-remote --exit-code origin "refs/tags/$TAG" >/dev/null; then
-            echo "::error::$TAG 태그가 이미 존재합니다. $SPEC_FILE 의 info.version을 범프하세요 — 스펙 변경은 새 공표 좌표를 요구합니다."
+            echo "::error::$TAG 태그가 이미 존재합니다. $SPEC_FILE 의 info.version을 아직 공표되지 않은 값으로 올리세요 — 스펙 변경은 새 공표 좌표를 요구합니다."
             exit 1
           fi
 
@@ -73,7 +75,7 @@ jobs:
         run: |
           TAG="${{ steps.coord.outputs.tag }}"
           if git ls-remote --exit-code origin "refs/tags/$TAG" >/dev/null; then
-            echo "::error::$TAG 태그가 이미 존재합니다 — 버전 미범프 스펙 변경이 머지되었습니다. info.version 범프를 담은 후속 PR이 필요합니다."
+            echo "::error::$TAG 태그가 이미 존재합니다 — 이미 공표된 좌표를 재사용하는 스펙 변경이 머지되었습니다. 새 공표 좌표(info.version)를 담은 후속 PR이 필요합니다."
             exit 1
           fi
           git tag "$TAG" "$GITHUB_SHA"
