@@ -15,7 +15,7 @@ info:
       비로그인으로 접근하면 401, `{}` 대안이 선언된 연산은 비로그인 접근을 허용한다.
     - 에러 응답은 어떤 경로(핸들러·생성 코드·미들웨어)로 끊기든 구조화 JSON(`ErrorResponse`)이다.
     - 모든 경로는 배포 환경변수 `ROOT_PATH`의 prefix 아래에 마운트될 수 있다.
-  version: 0.1.0
+  version: 0.2.0
 servers:
   - url: /
     description: ROOT_PATH prefix 아래에 마운트될 수 있다 (배포 설정의 관할)
@@ -29,6 +29,8 @@ tags:
     description: 사용자 매칭 조건 관리 (로그인 + AUTHORITY_MATCH_JOB 권한 필요)
   - name: company-review
     description: 회사 리뷰 조회 (공개)
+  - name: meta
+    description: 계약·서버 메타 정보 (공개)
 
 paths:
   /job_postings:
@@ -545,6 +547,30 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  /contract/version:
+    get:
+      operationId: getContractVersion
+      tags: [meta]
+      summary: 서빙 중인 REST 계약 버전 조회
+      description: |
+        이 서버 바이너리에 내장된 계약(openapi.yaml)의 info.version을 반환한다 —
+        공표 태그(spec/api-composer/vX.Y.Z)의 X.Y.Z와 같은 값이다.
+        소비자가 미구현 신호(501)나 미존재 라우트(404)를 만났을 때 서버가 어느 계약
+        판본을 서빙 중인지 판별하는 런타임 탐침이다.
+      security:
+        - {}
+      responses:
+        '200':
+          description: 계약 버전
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractVersion'
+        '401':
+          $ref: '#/components/responses/UnauthorizedToken'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -635,6 +661,16 @@ components:
         message:
           type: string
           description: 사람이 읽을 수 있는 오류 설명
+
+    ContractVersion:
+      type: object
+      description: 서버가 서빙 중인 REST 계약의 버전 — 공표 태그(spec/api-composer/vX.Y.Z)의 X.Y.Z와 같은 값
+      required:
+        - version
+      properties:
+        version:
+          type: string
+          description: 내장 명세(openapi.yaml)의 info.version (예 "0.2.0")
 
     JobPostingStatus:
       type: string

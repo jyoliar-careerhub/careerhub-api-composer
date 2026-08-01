@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 CareerHub API Composer는 Go로 작성된 API 조합(Composition) 마이크로서비스이다. 3개의 업스트림 gRPC 서비스(채용공고, 사용자정보, 리뷰)를 집계하여 통합 REST API를 제공하는 API Gateway 역할을 한다. 자체 데이터베이스는 사용하지 않는다.
 
-**spec-first다** — REST 계약의 진실은 `careerhub/apicomposer/api/openapi.yaml`이고, 서버 인터페이스·모델·라우팅 배선은 oapi-codegen으로 생성한다(`api.gen.go`). 엔드포인트를 추가·변경할 때는 명세를 먼저 고치고 `make openapi`로 재생성한다 — 생성 코드를 손으로 수정하지 않는다.
+**spec-first다** — REST 계약의 진실은 `spec/api-composer/openapi.yaml`이고(디렉터리 경로 = 공표 태그 prefix), 서버 인터페이스·모델·라우팅 배선은 oapi-codegen으로 생성한다(`careerhub/apicomposer/api/api.gen.go`). 엔드포인트를 추가·변경할 때는 명세를 먼저 고치고 `make openapi`로 재생성한다 — 생성 코드를 손으로 수정하지 않는다.
 
 ## 빌드 및 실행
 
@@ -14,7 +14,7 @@ CareerHub API Composer는 Go로 작성된 API 조합(Composition) 마이크로�
 make build          # 바이너리 빌드 (./myapp)
 make run            # 빌드 후 실행 (test.env 환경변수 사용)
 make test           # 전체 테스트 실행 (-p 1, timeout 60s)
-make openapi        # openapi.yaml → api.gen.go 재생성 (oapi-codegen)
+make openapi        # spec/api-composer/openapi.yaml → api.gen.go 재생성 (oapi-codegen)
 make proto          # .proto 파일에서 gRPC 코드 재생성
 make image_build    # Docker 이미지 빌드 (careerhub-api-composer:latest)
 ```
@@ -50,7 +50,7 @@ HTTP 요청 → Gorilla Mux Router
 
 ### 핵심 계층 구조 (`careerhub/apicomposer/`)
 
-- **`api/`** — **계약의 진실.** `openapi.yaml`(명세) + `api.gen.go`(생성 모델·strict 서버 인터페이스·gorilla 배선·내장 명세) + `oapi-codegen.yaml`(생성 설정). 재생성은 `make openapi`
+- **`api/`** — 명세의 생성물. `api.gen.go`(생성 모델·strict 서버 인터페이스·gorilla 배선·내장 명세) + `oapi-codegen.yaml`(생성 설정). **계약의 진실은 저장소 루트 `spec/api-composer/openapi.yaml`**이고, 재생성은 `make openapi`
 - **`app/`** — 애플리케이션 진입점. gRPC 연결 생성, 서비스/컨트롤러 의존성 주입, 미들웨어 체인·라우터 설정
 - **`controller/`** — strict 서버 구현. 4개 컨트롤러(JobPosting, ScrapJob, MatchJob, Review)가 생성 인터페이스(`StrictServerInterface`)를 나눠 구현하고, `strict.go`가 배선·명세 검증 미들웨어·권한 미들웨어·에러 응답을 담당
 - **`dto/`** — 컨트롤러 경계의 요청/응답 변환 모델
@@ -82,7 +82,7 @@ HTTP 요청 → Gorilla Mux Router
 - `/my/match-job/**` — 사용자 매칭 조건 관리 (권한 필요)
 - `/company-review/**` — 회사 리뷰 조회
 
-경로·연산의 정본은 `api/openapi.yaml`이다.
+경로·연산의 정본은 `spec/api-composer/openapi.yaml`이다.
 
 ## CI/CD
 

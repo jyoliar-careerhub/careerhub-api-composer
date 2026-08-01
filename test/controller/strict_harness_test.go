@@ -306,12 +306,16 @@ func newStrictTestServer(t *testing.T, f *fakes) (*httptest.Server, *tracetest.S
 		specValidationMW,
 	)
 
+	metaController, err := controller.NewMetaStrictController()
+	require.NoError(t, err)
+
 	postingService := posting.NewPostingService(f.posting, f.scrapJob, f.review)
 	strictServer := controller.NewStrictServer(
 		controller.NewJobPostingStrictController(postingService),
 		controller.NewScrapJobStrictController(userinfo.NewScrapJobService(f.scrapJob, f.posting, f.review)),
 		controller.NewMatchJobStrictController(userinfo.NewMatchJobService(f.matchJob)),
 		controller.NewReviewStrictController(review.NewReviewService(f.review)),
+		metaController,
 	)
 	controller.NewStrictHTTPHandler(strictServer, rootRouter)
 

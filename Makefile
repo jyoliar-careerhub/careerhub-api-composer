@@ -48,7 +48,7 @@ proto:
 
 ## openapi: regenerates Go models & server interfaces from the OpenAPI spec
 openapi:
-	@cd careerhub/apicomposer/api && go tool oapi-codegen --config oapi-codegen.yaml openapi.yaml
+	@go tool oapi-codegen --config careerhub/apicomposer/api/oapi-codegen.yaml spec/api-composer/openapi.yaml
 
 ## test: runs all tests
 # fake 기반 테스트라 실 업스트림이 불필요하다 — test.env가 없으면 더미 기본값으로 돈다 (CI 포함)

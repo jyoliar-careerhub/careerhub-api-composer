@@ -22,6 +22,7 @@ type StrictServer struct {
 	*ScrapJobStrictController
 	*MatchJobStrictController
 	*ReviewStrictController
+	*MetaStrictController
 }
 
 var _ api.StrictServerInterface = (*StrictServer)(nil)
@@ -31,12 +32,14 @@ func NewStrictServer(
 	scrapJob *ScrapJobStrictController,
 	matchJob *MatchJobStrictController,
 	review *ReviewStrictController,
+	meta *MetaStrictController,
 ) *StrictServer {
 	return &StrictServer{
 		JobPostingStrictController: jobPosting,
 		ScrapJobStrictController:   scrapJob,
 		MatchJobStrictController:   matchJob,
 		ReviewStrictController:     review,
+		MetaStrictController:       meta,
 	}
 }
 

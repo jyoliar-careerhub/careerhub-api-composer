@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/oapi-codegen/oapi-codegen/v2.8.0/configuration-schema.json
-# 재생성: make openapi (openapi.yaml → api.gen.go)
+# 재생성: make openapi (spec/api-composer/openapi.yaml → api.gen.go — 저장소 루트에서 실행, 경로는 루트 기준)
 package: api
 generate:
   models: true
@@ -7,4 +7,4 @@ generate:
   strict-server: true
   # 명세를 바이너리에 내장(GetSwagger) — 요청 검증 미들웨어·default 정합성 테스트의 입력
   embedded-spec: true
-output: api.gen.go
+output: careerhub/apicomposer/api/api.gen.go
