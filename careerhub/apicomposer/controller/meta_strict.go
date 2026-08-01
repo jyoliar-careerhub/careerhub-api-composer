@@ -7,17 +7,21 @@ import (
 )
 
 // MetaStrictController는 meta 태그 연산(계약·서버 메타 정보)을 서빙한다.
-//
-// GetContractVersion은 합의 선행 머지(스펙+stub) 관행의 첫 사례다(ADR-0019,
-// jyoliar-lab/ops-workflow#30): 계약은 공표됐고 구현은 아직이다 — 구현 완료까지
-// 501 + ErrorResponse(명세의 NotImplemented 응답)로 명시적 미구현 신호를 보낸다.
-// stub을 실 구현으로 바꾸는 PR의 요건은 README '합의 선행 머지' 절에 있다.
-type MetaStrictController struct{}
+type MetaStrictController struct {
+	contractVersion string
+}
 
-func NewMetaStrictController() *MetaStrictController {
-	return &MetaStrictController{}
+// NewMetaStrictController는 내장 명세에서 계약 버전을 한 번만 읽어 보관한다 —
+// GetSpec()은 호출마다 내장 명세를 디코드하므로 요청 경로에 두지 않는다.
+// 디코드 실패는 배선 시점에 끊는다(NewSpecValidationMW와 같은 취급).
+func NewMetaStrictController() (*MetaStrictController, error) {
+	swagger, err := api.GetSpec()
+	if err != nil {
+		return nil, err
+	}
+	return &MetaStrictController{contractVersion: swagger.Info.Version}, nil
 }
 
 func (c *MetaStrictController) GetContractVersion(ctx context.Context, request api.GetContractVersionRequestObject) (api.GetContractVersionResponseObject, error) {
-	return notImplemented501[api.GetContractVersion501JSONResponse](), nil
+	return api.GetContractVersion200JSONResponse{Version: c.contractVersion}, nil
 }

@@ -553,10 +553,10 @@ paths:
       tags: [meta]
       summary: 서빙 중인 REST 계약 버전 조회
       description: |
-        이 서버 바이너리에 내장된 계약(openapi.yaml)의 info.version을 반환한다.
+        이 서버 바이너리에 내장된 계약(openapi.yaml)의 info.version을 반환한다 —
+        공표 태그(spec/api-composer/vX.Y.Z)의 X.Y.Z와 같은 값이다.
         소비자가 미구현 신호(501)나 미존재 라우트(404)를 만났을 때 서버가 어느 계약
-        버전을 서빙 중인지 확인하는 런타임 탐침이다(ADR-0019 Consequences — 신호
-        자체로는 "아직 미구현"과 "구버전 서버"가 구분되지 않는다).
+        판본을 서빙 중인지 판별하는 런타임 탐침이다.
       security:
         - {}
       responses:
@@ -570,8 +570,6 @@ paths:
           $ref: '#/components/responses/UnauthorizedToken'
         '500':
           $ref: '#/components/responses/InternalServerError'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
 
 components:
   securitySchemes:
@@ -648,14 +646,6 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
     InternalServerError:
       description: 서버 내부 오류
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
-    NotImplemented:
-      description: |
-        공표됐으나 아직 구현되지 않은 연산(ADR-0019의 정상 상태).
-        계약 합의가 구현보다 먼저 머지(공표)된 경우, 구현 완료 전까지 이 응답이 나간다.
       content:
         application/json:
           schema:

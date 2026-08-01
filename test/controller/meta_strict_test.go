@@ -10,20 +10,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// 합의 선행 머지(스펙+stub) 관행의 미구현 신호 계약(ADR-0019, ops-workflow#30):
-// 공표됐으나 미구현인 연산은 생성 라우팅을 그대로 타고 501 + ErrorResponse로 응답한다.
-// GetContractVersion이 구현되면 이 테스트는 성공 계약 테스트로 대체된다 —
-// 그 대체가 곧 "구현 완료 확인"이다(README '합의 선행 머지' 절).
-func TestMetaStrict_ContractVersionStub(t *testing.T) {
+func TestMetaStrict_ContractVersion(t *testing.T) {
 	f := newFakes()
 	server, _ := newStrictTestServer(t, f)
 
 	resp, body := doRequest(t, http.MethodGet, server.URL+"/api/contract/version", "", nil)
 
-	require.Equal(t, http.StatusNotImplemented, resp.StatusCode)
-	// 미구현 신호도 에러 계약을 지킨다: text/plain이 아니라 구조화 JSON(ErrorResponse)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Contains(t, resp.Header.Get("Content-Type"), "application/json")
-	var errResp api.ErrorResponse
-	require.NoError(t, json.Unmarshal(body, &errResp), "body: %s", body)
-	assert.Equal(t, "Not Implemented", errResp.Message)
+
+	var got api.ContractVersion
+	require.NoError(t, json.Unmarshal(body, &got), "body: %s", body)
+
+	// 내장 명세의 info.version과 일치해야 한다 — 이 값이 공표 태그
+	// (spec/api-composer/vX.Y.Z)의 X.Y.Z이고, 소비자가 서버의 계약 판본을
+	// 판별하는 근거다. 리터럴 대신 명세에서 읽어 비교하므로 버전이 올라가도
+	// 이 테스트는 깨지지 않는다.
+	swagger, err := api.GetSpec()
+	require.NoError(t, err)
+	assert.Equal(t, swagger.Info.Version, got.Version)
+	assert.NotEmpty(t, got.Version)
 }

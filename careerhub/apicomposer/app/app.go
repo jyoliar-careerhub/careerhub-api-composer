@@ -125,12 +125,15 @@ func Run(mainCtx context.Context) {
 
 	// 전 라우트가 명세 생성 배선으로 등록된다 (ADR-0018 — 손 등록 없음).
 	// matchJob 연산의 권한 검사(AUTHORITY_MATCH_JOB)는 배선 내부의 권한 미들웨어가 한다.
+	metaController, err := controller.NewMetaStrictController()
+	checkErr(mainCtx, err)
+
 	strictServer := controller.NewStrictServer(
 		controller.NewJobPostingStrictController(postingService),
 		controller.NewScrapJobStrictController(scrapJobService),
 		controller.NewMatchJobStrictController(matchJobService),
 		controller.NewReviewStrictController(reviewService),
-		controller.NewMetaStrictController(),
+		metaController,
 	)
 	controller.NewStrictHTTPHandler(strictServer, rootRouter)
 

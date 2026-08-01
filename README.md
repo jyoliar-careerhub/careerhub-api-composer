@@ -30,16 +30,34 @@ REST 계약의 명세는 **`spec/api-composer/openapi.yaml`** 에 있다 (ADR-00
 
 계약 합의의 공표 지점은 **구현 완료가 아니라 스펙의 머지**다. 합의된 연산은 구현 전에 머지(공표)하고, provider의 구현과 소비자의 개발이 병렬로 진행된다. "공표됐으나 미구현"은 오류가 아니라 정상 상태다.
 
-**무엇을 stub으로 머지할 수 있나** — 계약(연산의 형태)이 합의된 것 전부. 구현 일정과 무관하다. 머지 묶음은:
+**무엇을 stub으로 머지할 수 있나** — 계약(연산의 형태)이 **사람과 합의된** 것. 구현 일정과는 무관하지만 합의와는 무관하지 않다: 합의 없이 연산을 추가하는 것은 선행 공표가 아니라 계약 오염이다(소비자가 그 좌표에 핀하면 영원히 501인 메서드를 생성하게 된다). 머지 묶음은:
 
-1. `openapi.yaml` 변경 — 신규 연산 + 해당 연산에 `'501'`(`NotImplemented`) 응답 선언 + 새 공표 좌표(`info.version`)
+1. `openapi.yaml` 변경 — 신규 연산에 `'501'` 응답 선언 + 새 공표 좌표(`info.version`). 미구현 신호도 에러 계약(`ErrorResponse` JSON)을 지킨다. 여러 연산이 대기하게 되면 공유 응답으로 올린다:
+
+   ```yaml
+   # paths의 해당 연산
+   '501':
+     description: 공표됐으나 아직 구현되지 않은 연산 (ADR-0019의 정상 상태)
+     content:
+       application/json:
+         schema:
+           $ref: '#/components/schemas/ErrorResponse'
+   ```
+
 2. `make openapi` 재생성물 (`api.gen.go`)
-3. strict 메서드 stub — `notImplemented501[...]` 반환. 미구현 신호도 에러 계약(`ErrorResponse` JSON)을 지킨다. 임베딩 조립(`controller/strict.go`)이 그대로 만족되므로 별도 배선은 없다
+3. strict 메서드 stub — 생성된 `<연산>501JSONResponse`를 반환한다. 임베딩 조립(`controller/strict.go`)이 그대로 만족되므로 별도 배선은 없다:
+
+   ```go
+   func (c *XStrictController) DoThing(ctx context.Context, request api.DoThingRequestObject) (api.DoThingResponseObject, error) {
+       return api.DoThing501JSONResponse{Message: "Not Implemented"}, nil
+   }
+   ```
+
 4. stub 응답 테스트(`test/controller/*_strict_test.go`) — 501 + `ErrorResponse` 단언
 
-머지 게이트(신선도 → 빌드 → 테스트)는 그대로 적용된다. 첫 사례: `GET /contract/version` (`controller/meta_strict.go`).
+머지 게이트(신선도 → 빌드 → 테스트)는 그대로 적용된다.
 
 **구현 완료는 어떻게 확인하는가** — 컴파일이 아니라 **테스트와 사람**이다(ADR-0019). stub을 실 구현으로 바꾸는 PR은:
 
 - 해당 연산의 **동작 테스트**(생성 라우팅 경유)로 stub의 501 테스트를 **대체**한다 — 이 대체가 구현 완료의 기계 확인이다.
-- 명세에서 해당 연산의 `'501'` 선언을 제거하고 `info.version`을 올린다 — "이 버전부터 구현 서빙을 의도한다"는 계약 변경이므로 새 공표 좌표가 나간다. (배포가 따라오기 전까지 구버전 서버를 만날 수 있음은 소비자 몫의 전제다 — 신호 구분은 `GET /contract/version`으로.)
+- 명세에서 해당 연산의 `'501'` 선언을 제거하고 `info.version`을 올린다 — "이 버전부터 구현 서빙을 의도한다"는 계약 변경이므로 새 공표 좌표가 나간다. (배포가 따라오기 전까지 구버전 서버를 만날 수 있음은 소비자 몫의 전제다 — 서버가 서빙 중인 판본은 `GET /contract/version`으로 확인한다.)

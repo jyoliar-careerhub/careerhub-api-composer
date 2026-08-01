@@ -107,7 +107,6 @@ func requireLoginAuthenticationFunc(ctx context.Context, input *openapi3filter.A
 
 const messageInternalServerError = "Internal Server Error"
 const messageForbidden = "Forbidden"
-const messageNotImplemented = "Not Implemented"
 
 // matchJobOperations — AUTHORITY_MATCH_JOB이 필요한 연산(operationId의 생성명).
 // 명세의 match-job 태그 그룹과 일치해야 한다.
