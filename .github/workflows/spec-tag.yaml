@@ -1,25 +1,33 @@
 name: Publish spec tag
 
 # REST 계약 공표 좌표 (ADR-0019·0020, jyoliar-lab/ops-workflow#30)
-#   openapi.yaml을 바꾼 머지(prod)에 spec/v{info.version} 태그를 자동 생성한다.
+#   openapi.yaml을 바꾼 머지(prod)에 <계약 디렉터리>/v{info.version} 태그를 자동 생성한다.
 #   태그는 소비자(careerhub-web 등)가 핀할 불변 공표 좌표다 — 버전에 semver 의미는
 #   아직 없다(좌표일 뿐, 의미 부여는 ADR-0021 보류 벌의 관할).
+#
+# 좌표 규약: 태그 prefix = 계약이 사는 디렉터리(SPEC_FILE의 디렉터리), 파일명은 고정
+#   관례(openapi.yaml) — 좌표에서 파일 위치가 파생되므로 소비자에게 별도 경로 지식이
+#   불요하다. provider 역할이 늘면 spec/<이름>/ 디렉터리와 태그 네임스페이스가 함께
+#   분리된다. 계약 디렉터리는 v로 시작하지 않아야 한다(앱 빌드 태그 v*와 불교차 —
+#   create-tag.yaml은 spec/... 태그에 매칭되지 않는다).
 #
 # 게이트: 같은 버전 태그가 이미 있으면 실패 — "버전 미범프 스펙 변경"을 거부한다.
 #   - pull_request의 check-version-bumped: 머지 전에 같은 검사를 미리 돌려 조기에 알린다.
 #   - push(prod)의 publish-tag: 태그 생성 자체가 최종 게이트다.
-#
-# 앱 빌드 태그(v*, create-tag.yaml)와 불교차 — spec/ prefix는 v*에 매칭되지 않는다.
+
+env:
+  # on.*.paths는 표현식을 못 받는다 — 스펙 경로를 바꾸면 아래 paths 두 곳도 함께 바꾼다
+  SPEC_FILE: spec/api-composer/openapi.yaml
 
 on:
   pull_request:
     paths:
-      - careerhub/apicomposer/api/openapi.yaml
+      - spec/api-composer/openapi.yaml
   push:
     branches:
       - prod
     paths:
-      - careerhub/apicomposer/api/openapi.yaml
+      - spec/api-composer/openapi.yaml
 
 permissions:
   contents: write
@@ -31,18 +39,19 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Read info.version
-        id: version
+      - name: Read tag coordinate from spec
+        id: coord
         run: |
-          VERSION="$(yq '.info.version' careerhub/apicomposer/api/openapi.yaml)"
+          VERSION="$(yq '.info.version' "$SPEC_FILE")"
           echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' \
             || { echo "::error::info.version이 X.Y.Z 형식이 아닙니다: '$VERSION'"; exit 1; }
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$(dirname "$SPEC_FILE")/v$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Fail if spec/v${{ steps.version.outputs.version }} already exists
+      - name: Fail if ${{ steps.coord.outputs.tag }} already exists
         run: |
-          if git ls-remote --exit-code origin "refs/tags/spec/v${{ steps.version.outputs.version }}" >/dev/null; then
-            echo "::error::spec/v${{ steps.version.outputs.version }} 태그가 이미 존재합니다. openapi.yaml의 info.version을 범프하세요 — 스펙 변경은 새 공표 좌표를 요구합니다."
+          TAG="${{ steps.coord.outputs.tag }}"
+          if git ls-remote --exit-code origin "refs/tags/$TAG" >/dev/null; then
+            echo "::error::$TAG 태그가 이미 존재합니다. $SPEC_FILE 의 info.version을 범프하세요 — 스펙 변경은 새 공표 좌표를 요구합니다."
             exit 1
           fi
 
@@ -52,17 +61,17 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Read info.version
-        id: version
+      - name: Read tag coordinate from spec
+        id: coord
         run: |
-          VERSION="$(yq '.info.version' careerhub/apicomposer/api/openapi.yaml)"
+          VERSION="$(yq '.info.version' "$SPEC_FILE")"
           echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' \
             || { echo "::error::info.version이 X.Y.Z 형식이 아닙니다: '$VERSION'"; exit 1; }
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$(dirname "$SPEC_FILE")/v$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Create tag spec/v${{ steps.version.outputs.version }}
+      - name: Create tag ${{ steps.coord.outputs.tag }}
         run: |
-          TAG="spec/v${{ steps.version.outputs.version }}"
+          TAG="${{ steps.coord.outputs.tag }}"
           if git ls-remote --exit-code origin "refs/tags/$TAG" >/dev/null; then
             echo "::error::$TAG 태그가 이미 존재합니다 — 버전 미범프 스펙 변경이 머지되었습니다. info.version 범프를 담은 후속 PR이 필요합니다."
             exit 1

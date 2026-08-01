@@ -674,7 +674,7 @@ components:
 
     ContractVersion:
       type: object
-      description: 서버가 서빙 중인 REST 계약의 버전 — 공표 태그(spec/vX.Y.Z)의 X.Y.Z와 같은 값
+      description: 서버가 서빙 중인 REST 계약의 버전 — 공표 태그(spec/api-composer/vX.Y.Z)의 X.Y.Z와 같은 값
       required:
         - version
       properties:

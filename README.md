@@ -2,7 +2,7 @@
 
 ## REST API 명세 (OpenAPI)
 
-REST 계약의 명세는 **`careerhub/apicomposer/api/openapi.yaml`** 에 있다 (ADR-0018: spec-first).
+REST 계약의 명세는 **`spec/api-composer/openapi.yaml`** 에 있다 (ADR-0018: spec-first). 디렉터리 경로가 그대로 공표 태그의 prefix다(아래 '계약 공표 좌표'). 다른 포트의 provider 역할이 늘면 `spec/<이름>/`으로 나란히 분리된다.
 
 - **생성물**: 같은 디렉터리의 `api.gen.go` — 명세에서 생성한 Go 모델·gorilla/mux 서버 인터페이스(strict). proto 패턴(`.proto` 옆 `.pb.go` 커밋)과 같이 명세와 나란히 커밋한다.
 - **재생성**: 명세를 수정했다면 아래 한 번으로 생성물을 갱신한다.
@@ -16,14 +16,15 @@ REST 계약의 명세는 **`careerhub/apicomposer/api/openapi.yaml`** 에 있다
 
 > **주의**: 전 컨트롤러가 생성 인터페이스로 구속되기 전까지(Epic jyoliar-lab/ops-workflow#13) 이 명세는 계약의 진실이 아니다. 계약을 바꿀 때는 명세를 먼저 수정하고(`openapi.yaml` → 리뷰), `make openapi`로 생성물을 갱신한 뒤 구현이 따라온다.
 
-## 계약 공표 좌표 — `spec/vX.Y.Z` 태그 (ADR-0019·0020)
+## 계약 공표 좌표 — `<계약 디렉터리>/vX.Y.Z` 태그 (ADR-0019·0020)
 
 소비자(careerhub-web 등)는 가변 브랜치의 `openapi.yaml`이 아니라 **불변 태그에 핀한다**.
 
-- `openapi.yaml`을 바꾼 머지(prod)마다 CI(`.github/workflows/spec-tag.yaml`)가 `info.version`을 읽어 **`spec/v{version}` 태그를 자동 생성**한다. 손 태그는 없다.
+- **좌표 규약: 태그 prefix = 계약이 사는 디렉터리, 파일명은 고정 관례(`openapi.yaml`)** — 좌표에서 파일 위치가 파생된다. 예: 태그 `spec/api-composer/v0.2.0` → 그 태그의 `spec/api-composer/openapi.yaml`. 소비자에게 별도 경로 지식이 필요 없다(gRPC의 Go prefix 태그 규칙과 동형).
+- `openapi.yaml`을 바꾼 머지(prod)마다 CI(`.github/workflows/spec-tag.yaml`)가 `info.version`을 읽어 **`spec/api-composer/v{version}` 태그를 자동 생성**한다. 손 태그는 없다.
 - 따라서 **스펙 변경은 `info.version` 범프를 요구한다** — 같은 버전 태그가 이미 있으면 PR 검사(`check-version-bumped`)와 태그 생성이 실패한다.
 - 버전은 **좌표일 뿐이다** — semver 의미(비호환=major 등)는 아직 부여하지 않는다(ADR-0021 논의 보류 중). 어느 버전에 올라탈지는 소비자가 자기 저장소의 핀으로 선택한다.
-- 앱 빌드 태그(`v*` → `create-tag.yaml` → ECR)와는 무관하다 — `spec/` prefix는 `v*`에 매칭되지 않는다.
+- 앱 빌드 태그(`v*` → `create-tag.yaml` → ECR)와는 무관하다 — 계약 디렉터리는 `v`로 시작하지 않으므로 `v*`에 매칭되지 않는다. 스펙 디렉터리를 옮기면 태그 prefix도 새 경로를 따른다(경로는 얼지 않는다 — `spec-tag.yaml`의 `SPEC_FILE`과 `paths` 두 곳을 함께 바꾼다).
 
 ## 합의 선행 머지 — 스펙+stub (ADR-0019)
 

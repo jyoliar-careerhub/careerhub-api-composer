@@ -9,7 +9,7 @@ import (
 	"github.com/jae2274/goutils/llog"
 )
 
-// ReviewStrictController는 명세(api/openapi.yaml)에서 생성된 strict 인터페이스로
+// ReviewStrictController는 명세(spec/api-composer/openapi.yaml)에서 생성된 strict 인터페이스로
 // review 엔드포인트를 서빙한다. 파라미터 파싱·응답 인코딩은 생성 코드(api.gen.go)가 하고,
 // 여기에는 검증·서비스 호출·타입 변환만 남는다.
 //
