@@ -22,6 +22,22 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # 업스트림 3종의 gRPC 계약 모듈은 private 저장소의 공표물이다(ADR-0020) — 기본
+      # GITHUB_TOKEN은 이 저장소 범위라 형제 저장소를 읽지 못한다. 러너는 일회용이므로
+      # 여기서는 gitconfig에 그대로 심는다(이미지 빌드 쪽은 BuildKit secret — create-tag.yaml).
+      - name: Configure access to private contract modules
+        env:
+          PRIVATE_DEPS_TOKEN: ${{ secrets.PRIVATE_DEPS_TOKEN }}
+        run: |
+          if [ -z "${PRIVATE_DEPS_TOKEN}" ]; then
+            echo "::error::PRIVATE_DEPS_TOKEN 시크릿이 없습니다 — private 계약 모듈(github.com/jyoliar-careerhub/*)을 받을 수 없습니다."
+            exit 1
+          fi
+          git config --global \
+            url."https://x-access-token:${PRIVATE_DEPS_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
+          echo "GOPRIVATE=github.com/jyoliar-careerhub/*" >> "$GITHUB_ENV"
+
       - name: Regenerate from spec
         run: make openapi
 

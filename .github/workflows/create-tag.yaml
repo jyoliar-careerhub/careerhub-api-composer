@@ -11,4 +11,8 @@ jobs:
     with:
       aws-account-id: "986069063944"
       aws-region: ap-northeast-2
+    secrets:
+      # 업스트림 3종의 gRPC 계약 모듈이 private 저장소의 공표물이라(ADR-0020) 이미지 빌드가
+      # go mod download 단계에서 자격증명을 요구한다 — go-test.yaml의 같은 조건과 한 쌍이다
+      private-deps-token: ${{ secrets.PRIVATE_DEPS_TOKEN }}
 

@@ -15,9 +15,10 @@ make build          # 바이너리 빌드 (./myapp)
 make run            # 빌드 후 실행 (test.env 환경변수 사용)
 make test           # 전체 테스트 실행 (-p 1, timeout 60s)
 make openapi        # spec/api-composer/openapi.yaml → api.gen.go 재생성 (oapi-codegen)
-make proto          # .proto 파일에서 gRPC 코드 재생성
 make image_build    # Docker 이미지 빌드 (careerhub-api-composer:latest)
 ```
+
+**gRPC 재생성 타겟은 없다** — 업스트림 3종의 proto는 이 저장소에 없고, provider가 공표한 계약 모듈을 `go.mod`의 태그 핀으로 결합한다(아래 참조).
 
 단일 테스트 실행:
 ```bash
@@ -55,7 +56,15 @@ HTTP 요청 → Gorilla Mux Router
 - **`controller/`** — strict 서버 구현. 4개 컨트롤러(JobPosting, ScrapJob, MatchJob, Review)가 생성 인터페이스(`StrictServerInterface`)를 나눠 구현하고, `strict.go`가 배선·명세 검증 미들웨어·권한 미들웨어·에러 응답을 담당
 - **`dto/`** — 컨트롤러 경계의 요청/응답 변환 모델
 - **`posting/`**, **`userinfo/`**, **`review/`** — 비즈니스 로직 서비스 계층. 각 서비스는 gRPC 클라이언트를 래핑
-- **`*/restapi_grpc/`** — protoc으로 생성된 gRPC 클라이언트 코드 (직접 수정 금지, `make proto`로 재생성)
+- **업스트림 gRPC 클라이언트** — 이 저장소에 없다. provider가 공표한 계약 모듈을 `go.mod`가 태그로 핀한다 (ADR-0020 — 계약 원천은 provider 저장소):
+
+  | 경계 | 모듈 | import 별칭 |
+  |---|---|---|
+  | 채용공고 | `github.com/jyoliar-careerhub/careerhub-posting-service/api/restapi` | `postingGrpc` |
+  | 리뷰 | `github.com/jyoliar-careerhub/careerhub-review-service/api/restapi` | `reviewGrpc` |
+  | 사용자정보 | `github.com/jyoliar-careerhub/careerhub-userinfo-service/api/restapi` | `scrapGrpc` · `userinfoGrpc` |
+
+  세 모듈 모두 Go 패키지 이름은 `restapi_grpc`다(경로 마지막 요소와 다르므로 import에 별칭을 명시한다). 계약이 바뀌면 provider가 새 좌표를 공표하고, 이 저장소는 핀을 올린다 — 여기서 proto를 두거나 재생성하지 않는다. **저장소가 private이라 `GOPRIVATE=github.com/jyoliar-careerhub/*`와 자격증명이 필요하다.**
 - **`common/domain/`** — 공유 도메인 모델 (JobPosting, Review, ScrapJob, MatchJob)
 - **`common/query/`** — 쿼리 필터링 로직
 - **`jwtresolver/`** — JWT 토큰 파싱 및 Claims 관리

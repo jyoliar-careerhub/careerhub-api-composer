@@ -1,7 +1,7 @@
 package domain
 
 import (
-	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/posting/restapi_grpc"
+	restapi_grpc "github.com/jyoliar-careerhub/careerhub-posting-service/api/restapi"
 )
 
 const (

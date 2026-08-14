@@ -9,7 +9,7 @@ import (
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/common/query"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/middleware"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/posting"
-	postingGrpc "github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/posting/restapi_grpc"
+	postingGrpc "github.com/jyoliar-careerhub/careerhub-posting-service/api/restapi"
 	"github.com/jae2274/goutils/llog"
 )
 

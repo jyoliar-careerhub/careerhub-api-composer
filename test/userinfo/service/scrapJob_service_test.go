@@ -6,8 +6,8 @@ package service
 // 	"testing"
 
 // 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/dto"
-// 	postingGrpc "github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/posting/restapi_grpc"
-// 	scrapJobGrpc "github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/userinfo/restapi_grpc"
+// 	postingGrpc "github.com/jyoliar-careerhub/careerhub-posting-service/api/restapi"
+// 	scrapJobGrpc "github.com/jyoliar-careerhub/careerhub-userinfo-service/api/restapi"
 // 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/userinfo/service"
 // 	"github.com/jae2274/goutils/ptr"
 // 	"github.com/stretchr/testify/require"

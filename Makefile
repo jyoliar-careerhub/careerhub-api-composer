@@ -41,10 +41,8 @@ stop:
 ## restart: stops and starts the application
 restart: stop start
 
-proto:
-	@protoc careerhub/apicomposer/posting/restapi_grpc/*.proto  --go_out=. --go-grpc_out=. --go-grpc_opt=paths=source_relative  --go_opt=paths=source_relative  --proto_path=.
-	@protoc careerhub/apicomposer/userinfo/restapi_grpc/*.proto  --go_out=. --go-grpc_out=. --go-grpc_opt=paths=source_relative  --go_opt=paths=source_relative  --proto_path=.
-	@protoc careerhub/apicomposer/review/restapi_grpc/*.proto  --go_out=. --go-grpc_out=. --go-grpc_opt=paths=source_relative  --go_opt=paths=source_relative  --proto_path=.
+# proto 타겟은 없다 — gRPC 계약의 원천은 provider 저장소이고(ADR-0020), 이 저장소는
+# 생성물을 공표 좌표(go.mod의 api/restapi 태그 핀)로 결합한다. 여기서 재생성하지 않는다.
 
 ## openapi: regenerates Go models & server interfaces from the OpenAPI spec
 openapi:

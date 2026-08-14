@@ -68,6 +68,12 @@ github.com/ianlancetaylor/demangle v0.0.0-20200824232613-28f6c0f3b639/go.mod h1:
 github.com/jae2274/goutils v1.0.35 h1:SD/MVw+n3nj+jNCPnsVBAS2IEpRKPsncxhAbAxa+YAA=
 github.com/jae2274/goutils v1.0.35/go.mod h1:efCHdW6AbXhLoDdd5acar0+ql8mRrW5108kvnBjDmfs=
 github.com/juju/gnuflag v0.0.0-20171113085948-2ce1bb71843d/go.mod h1:2PavIy+JPciBPrBUjwbNvtwB6RQlve+hkpll6QSNmOE=
+github.com/jyoliar-careerhub/careerhub-posting-service/api/restapi v0.1.0 h1:p6yzQRuzyyYxrIIxure4n8mI3XXKlt8s/7vKCl4QV08=
+github.com/jyoliar-careerhub/careerhub-posting-service/api/restapi v0.1.0/go.mod h1:RbA2TdJ6Ry9YvMUHaHpusE0zC1lmv/TJKZ/+/0rPBFQ=
+github.com/jyoliar-careerhub/careerhub-review-service/api/restapi v0.1.0 h1:r4oc5YtyUw5HPT64ki1K1r6ez0FjkilLb58REVgckU8=
+github.com/jyoliar-careerhub/careerhub-review-service/api/restapi v0.1.0/go.mod h1:ymw0FbDGb7MITVoOdIsU8CGOSFcKbA/8QnVjMBvYG4E=
+github.com/jyoliar-careerhub/careerhub-userinfo-service/api/restapi v0.1.0 h1:jFGXyC4jq2lH3bjjOeIgBz7RIkXMTPcvxDRs2so6Vh0=
+github.com/jyoliar-careerhub/careerhub-userinfo-service/api/restapi v0.1.0/go.mod h1:s36jGkEB9Ql+Thl+nQQfm5ZYM1e2lHIJ+JV+lBnMTdQ=
 github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORNo=
 github.com/kr/pretty v0.3.1 h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=
 github.com/kr/pretty v0.3.1/go.mod h1:hoEshYVHaxMs3cyo3Yncou5ZscifuDolrwPKZanG3xk=
@@ -222,8 +228,8 @@ google.golang.org/protobuf v1.21.0/go.mod h1:47Nbq4nVaFHyn7ilMalzfO3qCViNmqZ2kzi
 google.golang.org/protobuf v1.23.0/go.mod h1:EGpADcykh3NcUnDUJcl1+ZksZNG86OlYog2l/sGQquU=
 google.golang.org/protobuf v1.26.0-rc.1/go.mod h1:jlhhOSvTdKEhbULTjvd4ARK9grFBp09yW+WbY/TyQbw=
 google.golang.org/protobuf v1.26.0/go.mod h1:9q0QmTI4eRPtz6boOQmLYwt+qCgq0jsYwAQnmE0givc=
-google.golang.org/protobuf v1.36.11 h1:fV6ZwhNocDyBLK0dj+fg8ektcVegBBuEolpbTQyBNVE=
-google.golang.org/protobuf v1.36.11/go.mod h1:HTf+CrKn2C3g5S8VImy6tdcUvCska2kB7j23XfzDpco=
+google.golang.org/protobuf v1.36.12 h1:pJOKDDOyeXErUroCihFAd5LQuwXBSpVnKGrj5o/fwxc=
+google.golang.org/protobuf v1.36.12/go.mod h1:HTf+CrKn2C3g5S8VImy6tdcUvCska2kB7j23XfzDpco=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c h1:Hei/4ADfdWqJk1ZMxUNpqntNwaWcugrBjAiHlqqRiVk=
