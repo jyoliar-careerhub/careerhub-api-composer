@@ -2,7 +2,7 @@ package domain
 
 import (
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/common/query"
-	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/userinfo/restapi_grpc"
+	restapi_grpc "github.com/jyoliar-careerhub/careerhub-userinfo-service/api/restapi"
 )
 
 type ScrapJob struct {

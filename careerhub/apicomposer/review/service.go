@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/common/domain"
-	reviewGrpc "github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/review/restapi_grpc"
+	reviewGrpc "github.com/jyoliar-careerhub/careerhub-review-service/api/restapi"
 )
 
 const (

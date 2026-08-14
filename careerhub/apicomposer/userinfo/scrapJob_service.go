@@ -6,9 +6,9 @@ import (
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/common/domain"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/common/user_authority"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/jwtresolver"
-	postingGrpc "github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/posting/restapi_grpc"
-	reviewGrpc "github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/review/restapi_grpc"
-	scrapJobGrpc "github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/userinfo/restapi_grpc"
+	postingGrpc "github.com/jyoliar-careerhub/careerhub-posting-service/api/restapi"
+	reviewGrpc "github.com/jyoliar-careerhub/careerhub-review-service/api/restapi"
+	scrapJobGrpc "github.com/jyoliar-careerhub/careerhub-userinfo-service/api/restapi"
 )
 
 type ScrapJobService struct {

@@ -8,6 +8,9 @@ require (
 	github.com/gorilla/handlers v1.5.2
 	github.com/gorilla/mux v1.8.1
 	github.com/jae2274/goutils v1.0.35
+	github.com/jyoliar-careerhub/careerhub-posting-service/api/restapi v0.1.0
+	github.com/jyoliar-careerhub/careerhub-review-service/api/restapi v0.1.0
+	github.com/jyoliar-careerhub/careerhub-userinfo-service/api/restapi v0.1.0
 	github.com/oapi-codegen/nethttp-middleware v1.2.0
 	github.com/oapi-codegen/runtime v1.6.0
 	github.com/stretchr/testify v1.11.1
@@ -18,7 +21,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.43.0
 	go.opentelemetry.io/otel/trace v1.43.0
 	google.golang.org/grpc v1.80.0
-	google.golang.org/protobuf v1.36.11
+	google.golang.org/protobuf v1.36.12
 	gopkg.in/validator.v2 v2.0.1
 )
 

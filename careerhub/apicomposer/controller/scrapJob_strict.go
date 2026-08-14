@@ -6,7 +6,7 @@ import (
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/api"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/middleware"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/userinfo"
-	scrapGrpc "github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/userinfo/restapi_grpc"
+	scrapGrpc "github.com/jyoliar-careerhub/careerhub-userinfo-service/api/restapi"
 	"github.com/jae2274/goutils/llog"
 )
 

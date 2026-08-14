@@ -3,7 +3,7 @@ package domain
 import (
 	"time"
 
-	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/review/restapi_grpc"
+	restapi_grpc "github.com/jyoliar-careerhub/careerhub-review-service/api/restapi"
 )
 
 type ReviewInfo struct {

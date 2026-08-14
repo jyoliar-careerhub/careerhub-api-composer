@@ -9,7 +9,7 @@ import (
 
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/api"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/jwtresolver"
-	reviewGrpc "github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/review/restapi_grpc"
+	reviewGrpc "github.com/jyoliar-careerhub/careerhub-review-service/api/restapi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
