@@ -32,14 +32,14 @@ import (
 
 const testPrefix = "/api" // ROOT_PATH prefix — 생성 배선·검증 미들웨어가 prefix 아래에서도 동작함을 함께 실증
 
-// testJwks — 패키지 공용 가짜 JWKS 하네스(RSA 키쌍 + 엔드포인트). 서버별 resolver는
-// newStrictTestServer가 만들고, 토큰 서명은 newToken이 이 키로 한다.
-var testJwks *tokentest.Jwks
+// testZitadel — 패키지 공용 가짜 발급자(FakeZitadel: RSA 서명 키 + JWKS 엔드포인트).
+// 서버별 resolver는 newStrictTestServer가 만들고, 토큰 발급은 newToken이 여기서 받는다.
+var testZitadel *tokentest.FakeZitadel
 
 func TestMain(m *testing.M) {
-	testJwks = tokentest.Start()
+	testZitadel = tokentest.StartFakeZitadel()
 	code := m.Run()
-	testJwks.Close()
+	testZitadel.Close()
 	os.Exit(code)
 }
 
@@ -313,7 +313,7 @@ func newStrictTestServer(t *testing.T, f *fakes) (*httptest.Server, *tracetest.S
 	rootRouter.Use(
 		otelmux.Middleware("api-composer-test", otelmux.WithTracerProvider(tracerProvider)),
 		middleware.TraceContextLoggerMW(),
-		middleware.SetClaimsMW(testJwks.NewResolver(t)),
+		middleware.SetClaimsMW(testZitadel.NewResolver(t)),
 		specValidationMW,
 	)
 
@@ -337,7 +337,7 @@ func newStrictTestServer(t *testing.T, f *fakes) (*httptest.Server, *tracetest.S
 
 func newToken(t *testing.T, userID string, authorities []string) string {
 	t.Helper()
-	return testJwks.AccessToken(userID, authorities)
+	return testZitadel.IssueAccessToken(userID, authorities)
 }
 
 // doRequest — token 빈 문자열이면 비로그인, body nil이면 본문 없음.

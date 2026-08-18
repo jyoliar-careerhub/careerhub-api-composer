@@ -23,7 +23,7 @@ import (
 func expiredToken(t *testing.T) string {
 	t.Helper()
 	// 1시간 전 발급 · 수명 10분 — 만료 상태다
-	return testJwks.SignToken(&jwtresolver.CustomClaims{
+	return testZitadel.IssueToken(&jwtresolver.CustomClaims{
 		RegisteredClaims: tokentest.RegisteredClaims("user-1", time.Now().Add(-time.Hour), 10*time.Minute),
 	})
 }
@@ -31,9 +31,9 @@ func expiredToken(t *testing.T) string {
 func wrongSignatureToken(t *testing.T) string {
 	t.Helper()
 	// JWKS에 없는 다른 RSA 키로 서명 — kid는 같아 재조회로도 통과 불가
-	other := tokentest.NewJwks(t)
-	other.Kid = testJwks.Kid
-	return other.SignToken(&jwtresolver.CustomClaims{
+	other := tokentest.NewFakeZitadel(t)
+	other.Kid = testZitadel.Kid
+	return other.IssueToken(&jwtresolver.CustomClaims{
 		RegisteredClaims: tokentest.RegisteredClaims("user-1", time.Now(), 10*time.Minute),
 	})
 }

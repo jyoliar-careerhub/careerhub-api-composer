@@ -21,8 +21,8 @@ import (
 // SetClaimsMW 단위 테스트 — claims 주입과 무효 토큰 401(원인 불문 · ErrorResponse JSON).
 // 로그인 필수·권한 검사는 미들웨어 함수가 아니라 명세 기반 배선의 관할이다(계약 테스트가 고정).
 func TestSetClaimsMW(t *testing.T) {
-	jwks := tokentest.NewJwks(t)
-	server := initServer(t, jwks)
+	zitadel := tokentest.NewFakeZitadel(t)
+	server := initServer(t, zitadel)
 	defer server.Close()
 
 	getBody := func(res *http.Response) string {
@@ -41,7 +41,7 @@ func TestSetClaimsMW(t *testing.T) {
 	t.Run("유효 토큰 — claims 주입", func(t *testing.T) {
 		req, err := http.NewRequest("GET", server.URL+"/hello", nil)
 		require.NoError(t, err)
-		req.Header.Set("Authorization", "Bearer "+jwks.AccessToken("Jyo Liar", nil))
+		req.Header.Set("Authorization", "Bearer "+zitadel.IssueAccessToken("Jyo Liar", nil))
 
 		res, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
@@ -54,10 +54,10 @@ func TestSetClaimsMW(t *testing.T) {
 			name  string
 			token string
 		}{
-			{name: "만료", token: "Bearer " + createExpiredToken(t, jwks, "Jyo Liar")},
+			{name: "만료", token: "Bearer " + createExpiredToken(t, zitadel, "Jyo Liar")},
 			{name: "형식 불량(malformed)", token: "Bearer undefined"},
-			{name: "서명 불일치", token: "Bearer " + createWrongKeyToken(t, jwks, "Jyo Liar")},
-			{name: "Bearer prefix 없는 raw 토큰", token: jwks.AccessToken("Jyo Liar", nil)},
+			{name: "서명 불일치", token: "Bearer " + createWrongKeyToken(t, zitadel, "Jyo Liar")},
+			{name: "Bearer prefix 없는 raw 토큰", token: zitadel.IssueAccessToken("Jyo Liar", nil)},
 		}
 
 		for _, tc := range cases {
@@ -80,8 +80,8 @@ func TestSetClaimsMW(t *testing.T) {
 	})
 }
 
-func initServer(t *testing.T, jwks *tokentest.Jwks) *httptest.Server {
-	jr := jwks.NewResolver(t)
+func initServer(t *testing.T, zitadel *tokentest.FakeZitadel) *httptest.Server {
+	jr := zitadel.NewResolver(t)
 
 	router := mux.NewRouter()
 	router.Use(httpmw.SetTraceIdMW(), middleware.SetClaimsMW(jr))
@@ -97,17 +97,17 @@ func initServer(t *testing.T, jwks *tokentest.Jwks) *httptest.Server {
 	return httptest.NewServer(router)
 }
 
-func createExpiredToken(t *testing.T, jwks *tokentest.Jwks, userId string) string {
-	return jwks.SignToken(&jwtresolver.CustomClaims{
+func createExpiredToken(t *testing.T, zitadel *tokentest.FakeZitadel, userId string) string {
+	return zitadel.IssueToken(&jwtresolver.CustomClaims{
 		RegisteredClaims: tokentest.RegisteredClaims(userId, time.Now().Add(-2*time.Hour), time.Hour),
 	})
 }
 
 // createWrongKeyToken은 JWKS에 없는 다른 RSA 키로 서명한다 — 서명 불일치.
-func createWrongKeyToken(t *testing.T, jwks *tokentest.Jwks, userId string) string {
-	other := tokentest.NewJwks(t)
-	other.Kid = jwks.Kid // kid는 같지만 키가 다르다 — 재조회로도 통과 불가
-	return other.SignToken(&jwtresolver.CustomClaims{
+func createWrongKeyToken(t *testing.T, zitadel *tokentest.FakeZitadel, userId string) string {
+	other := tokentest.NewFakeZitadel(t)
+	other.Kid = zitadel.Kid // kid는 같지만 키가 다르다 — 재조회로도 통과 불가
+	return other.IssueToken(&jwtresolver.CustomClaims{
 		RegisteredClaims: tokentest.RegisteredClaims(userId, time.Now(), time.Hour),
 	})
 }
