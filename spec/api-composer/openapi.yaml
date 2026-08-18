@@ -15,7 +15,7 @@ info:
       비로그인으로 접근하면 401, `{}` 대안이 선언된 연산은 비로그인 접근을 허용한다.
     - 에러 응답은 어떤 경로(핸들러·생성 코드·미들웨어)로 끊기든 구조화 JSON(`ErrorResponse`)이다.
     - 모든 경로는 배포 환경변수 `ROOT_PATH`의 prefix 아래에 마운트될 수 있다.
-  version: 0.2.0
+  version: 0.3.0
 servers:
   - url: /
     description: ROOT_PATH prefix 아래에 마운트될 수 있다 (배포 설정의 관할)
