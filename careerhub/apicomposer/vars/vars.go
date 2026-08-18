@@ -11,7 +11,9 @@ type Vars struct {
 	UserinfoGrpcEndpoint     string
 	ReviewGrpcEndpoint       string
 	RootPath                 string
-	SecretKey                string
+	OidcIssuer               string
+	OidcAudience             string
+	OidcJwksUrl              string // 선택 — 비면 issuer에서 파생(Zitadel 규약)
 	AccessControlAllowOrigin *string
 	ApiPort                  int
 }
@@ -44,7 +46,12 @@ func Variables() (*Vars, error) {
 		return nil, err
 	}
 
-	secretKey, err := getFromEnv("SECRET_KEY")
+	oidcIssuer, err := getFromEnv("OIDC_ISSUER")
+	if err != nil {
+		return nil, err
+	}
+
+	oidcAudience, err := getFromEnv("OIDC_AUDIENCE")
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +73,9 @@ func Variables() (*Vars, error) {
 		UserinfoGrpcEndpoint:     userinfoGrpcEndpoint,
 		ReviewGrpcEndpoint:       reviewGrpcEndpoint,
 		RootPath:                 os.Getenv("ROOT_PATH"),
-		SecretKey:                secretKey,
+		OidcIssuer:               oidcIssuer,
+		OidcAudience:             oidcAudience,
+		OidcJwksUrl:              os.Getenv("OIDC_JWKS_URL"),
 		ApiPort:                  int(apiPortInt),
 		AccessControlAllowOrigin: accesControlAllowOrigin,
 	}, nil

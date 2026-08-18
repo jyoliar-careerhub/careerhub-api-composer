@@ -578,8 +578,10 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: |
-        `Authorization: Bearer {token}`. 토큰의 Claims에 userId·authorities가 담긴다.
-        (현행 파서는 `Bearer ` prefix 없이 토큰만 보내도 수용한다.)
+        `Authorization: Bearer {token}` — `Bearer ` prefix는 필수다(RFC 6750).
+        prefix 없는 raw 토큰은 무효 토큰과 같이 401로 거부된다.
+        토큰은 Zitadel 발급 JWT(RS256)이고, 게이트웨이가 JWKS로 서명·`iss`·`aud`·`exp`를
+        로컬 검증한다. 사용자 식별은 `sub`, 권한·동의는 `careerhub:` 네임스페이스 클레임이다.
 
   parameters:
     Page:

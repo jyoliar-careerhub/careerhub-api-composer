@@ -7,8 +7,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
-	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/controller"
@@ -20,6 +20,7 @@ import (
 	reviewGrpc "github.com/jyoliar-careerhub/careerhub-review-service/api/restapi"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/userinfo"
 	scrapGrpc "github.com/jyoliar-careerhub/careerhub-userinfo-service/api/restapi"
+	"github.com/jae2274/careerhub-api-composer/test/tokentest"
 	"github.com/jae2274/goutils/mw"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux"
@@ -29,8 +30,18 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-const testSecret = "test-secret-key"
 const testPrefix = "/api" // ROOT_PATH prefix — 생성 배선·검증 미들웨어가 prefix 아래에서도 동작함을 함께 실증
+
+// testJwks — 패키지 공용 가짜 JWKS 하네스(RSA 키쌍 + 엔드포인트). 서버별 resolver는
+// newStrictTestServer가 만들고, 토큰 서명은 newToken이 이 키로 한다.
+var testJwks *tokentest.Jwks
+
+func TestMain(m *testing.M) {
+	testJwks = tokentest.Start()
+	code := m.Run()
+	testJwks.Close()
+	os.Exit(code)
+}
 
 // ctxCapture는 업스트림 호출 시점의 ctx 값(관측·인증 관통 검증용)을 기록한다.
 type ctxCapture struct {
@@ -302,7 +313,7 @@ func newStrictTestServer(t *testing.T, f *fakes) (*httptest.Server, *tracetest.S
 	rootRouter.Use(
 		otelmux.Middleware("api-composer-test", otelmux.WithTracerProvider(tracerProvider)),
 		middleware.TraceContextLoggerMW(),
-		middleware.SetClaimsMW(jwtresolver.NewJwtResolver(testSecret)),
+		middleware.SetClaimsMW(testJwks.NewResolver(t)),
 		specValidationMW,
 	)
 
@@ -326,9 +337,7 @@ func newStrictTestServer(t *testing.T, f *fakes) (*httptest.Server, *tracetest.S
 
 func newToken(t *testing.T, userID string, authorities []string) string {
 	t.Helper()
-	tokens, err := jwtresolver.NewJwtResolver(testSecret).CreateToken(userID, authorities, time.Now())
-	require.NoError(t, err)
-	return tokens.AccessToken
+	return testJwks.AccessToken(userID, authorities)
 }
 
 // doRequest — token 빈 문자열이면 비로그인, body nil이면 본문 없음.
