@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/api"
-	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/jwtresolver"
 	reviewGrpc "github.com/jyoliar-careerhub/careerhub-review-service/api/restapi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -116,10 +115,7 @@ func TestReviewStrict_Auth(t *testing.T) {
 		f := newFakes()
 		server, _ := newStrictTestServer(t, f)
 
-		tokens, err := jwtresolver.NewJwtResolver(testSecret).CreateToken("test-user", nil, time.Now().Add(-24*time.Hour))
-		require.NoError(t, err)
-
-		resp, body := doRequest(t, http.MethodGet, server.URL+"/api/company-review/reviews?companyName=acme", tokens.AccessToken, nil)
+		resp, body := doRequest(t, http.MethodGet, server.URL+"/api/company-review/reviews?companyName=acme", expiredToken(t), nil)
 
 		requireUnauthorizedJSON(t, resp, body)
 		assert.Nil(t, f.review.gotReviews)

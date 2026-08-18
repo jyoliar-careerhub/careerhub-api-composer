@@ -97,7 +97,13 @@ func Run(mainCtx context.Context) {
 	checkErr(mainCtx, err)
 	reviewClient := reviewGrpc.NewReviewReaderGrpcClient(conn)
 
-	jr := jwtresolver.NewJwtResolver(envVars.SecretKey)
+	// Zitadel JWKS 로컬 검증(ADR-0029) — 요청 경로에 검증 목적의 원격 호출이 없다.
+	jr, err := jwtresolver.NewJwtResolver(mainCtx, jwtresolver.Config{
+		Issuer:   envVars.OidcIssuer,
+		Audience: envVars.OidcAudience,
+		JwksUrl:  envVars.OidcJwksUrl,
+	})
+	checkErr(mainCtx, err)
 
 	//rootRouter 설정
 	rootRouter := mux.NewRouter().PathPrefix(envVars.RootPath).Subrouter()

@@ -7,8 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/api"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/jwtresolver"
+	"github.com/jae2274/careerhub-api-composer/test/tokentest"
 	postingGrpc "github.com/jyoliar-careerhub/careerhub-posting-service/api/restapi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,17 +22,31 @@ import (
 
 func expiredToken(t *testing.T) string {
 	t.Helper()
-	// access 토큰 수명 10분 — 1시간 전 발급이면 만료 상태다
-	tokens, err := jwtresolver.NewJwtResolver(testSecret).CreateToken("user-1", nil, time.Now().Add(-time.Hour))
-	require.NoError(t, err)
-	return tokens.AccessToken
+	// 1시간 전 발급 · 수명 10분 — 만료 상태다
+	return testZitadel.IssueToken(&jwtresolver.CustomClaims{
+		RegisteredClaims: tokentest.RegisteredClaims("user-1", time.Now().Add(-time.Hour), 10*time.Minute),
+	})
 }
 
 func wrongSignatureToken(t *testing.T) string {
 	t.Helper()
-	tokens, err := jwtresolver.NewJwtResolver("not-the-server-secret").CreateToken("user-1", nil, time.Now())
+	// JWKS에 없는 다른 RSA 키로 서명 — kid는 같아 재조회로도 통과 불가
+	other := tokentest.NewFakeZitadel(t)
+	other.Kid = testZitadel.Kid
+	return other.IssueToken(&jwtresolver.CustomClaims{
+		RegisteredClaims: tokentest.RegisteredClaims("user-1", time.Now(), 10*time.Minute),
+	})
+}
+
+func legacyHs256Token(t *testing.T) string {
+	t.Helper()
+	// 레거시 모양 그대로: 공유 대칭키(HS256) + json 태그 없는 Go 필드명 키 — 하드 컷오버로 거부 대상
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"UserId": "user-1",
+		"exp":    time.Now().Add(10 * time.Minute).Unix(),
+	}).SignedString([]byte("legacy-secret-key"))
 	require.NoError(t, err)
-	return tokens.AccessToken
+	return token
 }
 
 func requireUnauthorizedJSON(t *testing.T, resp *http.Response, body []byte) {
@@ -51,6 +67,7 @@ func TestAuthContract_InvalidToken(t *testing.T) {
 		{name: "만료", token: expiredToken(t)},
 		{name: "형식 불량(malformed)", token: "undefined"},
 		{name: "서명 불일치", token: wrongSignatureToken(t)},
+		{name: "레거시 대칭키(HS256)", token: legacyHs256Token(t)},
 	}
 
 	// 전역 미들웨어의 판정이므로 공개 엔드포인트에서도 동일하다

@@ -15,7 +15,7 @@ info:
       비로그인으로 접근하면 401, `{}` 대안이 선언된 연산은 비로그인 접근을 허용한다.
     - 에러 응답은 어떤 경로(핸들러·생성 코드·미들웨어)로 끊기든 구조화 JSON(`ErrorResponse`)이다.
     - 모든 경로는 배포 환경변수 `ROOT_PATH`의 prefix 아래에 마운트될 수 있다.
-  version: 0.2.0
+  version: 0.3.0
 servers:
   - url: /
     description: ROOT_PATH prefix 아래에 마운트될 수 있다 (배포 설정의 관할)
@@ -578,8 +578,10 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: |
-        `Authorization: Bearer {token}`. 토큰의 Claims에 userId·authorities가 담긴다.
-        (현행 파서는 `Bearer ` prefix 없이 토큰만 보내도 수용한다.)
+        `Authorization: Bearer {token}` — `Bearer ` prefix는 필수다(RFC 6750).
+        prefix 없는 raw 토큰은 무효 토큰과 같이 401로 거부된다.
+        토큰은 Zitadel 발급 JWT(RS256)이고, 게이트웨이가 JWKS로 서명·`iss`·`aud`·`exp`를
+        로컬 검증한다. 사용자 식별은 `sub`, 권한·동의는 `careerhub:` 네임스페이스 클레임이다.
 
   parameters:
     Page:

@@ -1,102 +1,64 @@
 package jwtresolver
 
 import (
+	"context"
 	"errors"
 	"strings"
-	"time"
 
+	"github.com/MicahParks/keyfunc/v3"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jae2274/goutils/terr"
-	"gopkg.in/validator.v2"
 )
 
+// Config는 Zitadel JWKS 로컬 검증(ADR-0029)의 좌표다.
+type Config struct {
+	Issuer   string // `iss` 기대값 (예: https://id.careerhub.jyo-liar.com)
+	Audience string // `aud`에 포함돼야 하는 값 (careerhub-web client_id 등)
+	JwksUrl  string // JWKS 엔드포인트. 비면 {Issuer}/oauth/v2/keys (Zitadel 규약)
+}
+
 type JwtResolver struct {
-	secretKey            []byte
-	validator            *jwt.Validator
-	accessTokenDuration  time.Duration
-	refreshTokenDuration time.Duration
+	keyfunc keyfunc.Keyfunc
+	parser  *jwt.Parser
 }
 
-type TokenInfo struct {
-	GrantType    string `json:"grantType"`
-	AccessToken  string `json:"accessToken"`
-	RefreshToken string `json:"refreshToken"`
-}
+// NewJwtResolver는 JWKS 캐시(제어 경로)를 배선한다. 키 획득 실패 모드는 keyfunc의
+// 기본값이 다룬다: 콜드 스타트 첫 조회 실패는 생성을 막지 않고(빈 캐시로 시작),
+// 미지 `kid`는 rate limit 안에서 재조회하며(키 회전 추종·콜드 스타트 복구),
+// 주기 갱신 실패 시 캐시된 키가 유지된다(발급자 정지 중 검증 지속).
+func NewJwtResolver(ctx context.Context, config Config) (*JwtResolver, error) {
+	jwksUrl := config.JwksUrl
+	if jwksUrl == "" {
+		jwksUrl = strings.TrimSuffix(config.Issuer, "/") + "/oauth/v2/keys"
+	}
 
-func NewJwtResolver(secretKey string) *JwtResolver {
+	kf, err := keyfunc.NewDefaultCtx(ctx, []string{jwksUrl})
+	if err != nil {
+		return nil, terr.Wrap(err)
+	}
+
 	return &JwtResolver{
-		secretKey:            []byte(secretKey),
-		validator:            jwt.NewValidator(),
-		accessTokenDuration:  10 * time.Minute,
-		refreshTokenDuration: 24 * time.Hour,
-	}
-}
-
-func (j *JwtResolver) SetAccessTokenDuration(duration time.Duration) error {
-	if duration < 0 {
-		return terr.New("duration must be positive")
-	}
-	j.accessTokenDuration = duration
-	return nil
-}
-
-func (j *JwtResolver) SetRefreshTokenDuration(duration time.Duration) error {
-	if duration < 0 {
-		return terr.New("duration must be positive")
-	}
-	j.refreshTokenDuration = duration
-	return nil
-}
-
-func (j *JwtResolver) GetAccessTokenDuration() time.Duration {
-	return j.accessTokenDuration
-}
-
-func (j *JwtResolver) GetRefreshTokenDuration() time.Duration {
-	return j.refreshTokenDuration
-}
-
-func (j *JwtResolver) CreateToken(userId string, authorities []string, createdAt time.Time) (*TokenInfo, error) {
-	accessToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256,
-		&CustomClaims{
-			UserId:      userId,
-			Authorities: authorities,
-			RegisteredClaims: jwt.RegisteredClaims{
-				ExpiresAt: jwt.NewNumericDate(createdAt.Add(j.accessTokenDuration)),
-			},
-		},
-	).SignedString(j.secretKey)
-
-	if err != nil {
-		return nil, err
-	}
-
-	refreshToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256,
-		&CustomClaims{
-			UserId: userId,
-			RegisteredClaims: jwt.RegisteredClaims{
-				ExpiresAt: jwt.NewNumericDate(createdAt.Add(j.refreshTokenDuration)),
-			},
-		},
-	).SignedString(j.secretKey)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &TokenInfo{
-		GrantType:    "Bearer",
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
+		keyfunc: kf,
+		parser: jwt.NewParser(
+			jwt.WithValidMethods([]string{jwt.SigningMethodRS256.Alg()}), // alg confusion 차단 — RS256 고정
+			jwt.WithIssuer(config.Issuer),
+			jwt.WithAudience(config.Audience),
+			jwt.WithExpirationRequired(),
+		),
 	}, nil
 }
 
+// ParseToken은 `Authorization` 헤더 값을 받아 서명·`iss`·`aud`·`exp`를 로컬에서 검증한다.
+// 반환: (claims, 유효 여부, 에러). 만료·미발효는 에러 없이 무효로, 그 외 무효는 에러로 구분한다
+// — 호출부(SetClaimsMW)는 어느 쪽이든 401을 내고, 구분은 로그로만 남는다.
 func (j *JwtResolver) ParseToken(tokenString string) (*CustomClaims, bool, error) {
+	// `Bearer ` prefix 강제 (RFC 6750) — prefix 없는 raw 토큰은 형식 불량이다.
+	tokenString, found := strings.CutPrefix(tokenString, "Bearer ")
+	if !found {
+		return &CustomClaims{}, false, terr.New("invalid token. Bearer prefix is required")
+	}
 
-	tokenString = strings.Replace(tokenString, "Bearer ", "", 1)
-	jwtToken, err := jwt.ParseWithClaims(tokenString, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
-		return j.secretKey, nil
-	})
+	jwtToken, err := j.parser.ParseWithClaims(tokenString, &CustomClaims{}, j.keyfunc.Keyfunc)
 
 	if errors.Is(err, jwt.ErrTokenExpired) || errors.Is(err, jwt.ErrTokenNotValidYet) {
 		return &CustomClaims{}, false, nil
@@ -105,24 +67,16 @@ func (j *JwtResolver) ParseToken(tokenString string) (*CustomClaims, bool, error
 	} else if err != nil {
 		return &CustomClaims{}, false, terr.Wrap(err)
 	} else if jwtToken.Valid {
-		if claims, ok := jwtToken.Claims.(*CustomClaims); ok {
-			if err := validator.Validate(claims); err != nil {
-				return claims, false, err
-			} else {
-				return claims, true, nil
-			}
-		} else {
+		claims, ok := jwtToken.Claims.(*CustomClaims)
+		if !ok {
 			return &CustomClaims{}, false, terr.New("invalid token. claims is not CustomClaims type")
 		}
+		if claims.Subject == "" {
+			return &CustomClaims{}, false, terr.New("invalid token. subject(sub) is empty")
+		}
+		claims.UserId = claims.Subject
+		return claims, true, nil
 	} else {
 		return &CustomClaims{}, false, nil
 	}
-}
-
-func (j *JwtResolver) Validate(claims *CustomClaims) error {
-	if err := validator.Validate(claims); err != nil {
-		return err
-	}
-
-	return j.validator.Validate(claims)
 }

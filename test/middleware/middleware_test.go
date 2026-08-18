@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/api"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/jwtresolver"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/middleware"
+	"github.com/jae2274/careerhub-api-composer/test/tokentest"
 	"github.com/jae2274/goutils/mw/httpmw"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,8 +21,8 @@ import (
 // SetClaimsMW 단위 테스트 — claims 주입과 무효 토큰 401(원인 불문 · ErrorResponse JSON).
 // 로그인 필수·권한 검사는 미들웨어 함수가 아니라 명세 기반 배선의 관할이다(계약 테스트가 고정).
 func TestSetClaimsMW(t *testing.T) {
-	secretKey := "just a secret key"
-	server := initServer(secretKey)
+	zitadel := tokentest.NewFakeZitadel(t)
+	server := initServer(t, zitadel)
 	defer server.Close()
 
 	getBody := func(res *http.Response) string {
@@ -41,7 +41,7 @@ func TestSetClaimsMW(t *testing.T) {
 	t.Run("유효 토큰 — claims 주입", func(t *testing.T) {
 		req, err := http.NewRequest("GET", server.URL+"/hello", nil)
 		require.NoError(t, err)
-		req.Header.Set("Authorization", createAccessToken(t, secretKey, "Jyo Liar", []string{}))
+		req.Header.Set("Authorization", "Bearer "+zitadel.IssueAccessToken("Jyo Liar", nil))
 
 		res, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
@@ -54,9 +54,10 @@ func TestSetClaimsMW(t *testing.T) {
 			name  string
 			token string
 		}{
-			{name: "만료", token: createExpiredToken(t, secretKey, "Jyo Liar")},
+			{name: "만료", token: "Bearer " + createExpiredToken(t, zitadel, "Jyo Liar")},
 			{name: "형식 불량(malformed)", token: "Bearer undefined"},
-			{name: "서명 불일치", token: createAccessToken(t, "another secret key", "Jyo Liar", []string{})},
+			{name: "서명 불일치", token: "Bearer " + createWrongKeyToken(t, zitadel, "Jyo Liar")},
+			{name: "Bearer prefix 없는 raw 토큰", token: zitadel.IssueAccessToken("Jyo Liar", nil)},
 		}
 
 		for _, tc := range cases {
@@ -79,8 +80,8 @@ func TestSetClaimsMW(t *testing.T) {
 	})
 }
 
-func initServer(secretKey string) *httptest.Server {
-	jr := jwtresolver.NewJwtResolver(secretKey)
+func initServer(t *testing.T, zitadel *tokentest.FakeZitadel) *httptest.Server {
+	jr := zitadel.NewResolver(t)
 
 	router := mux.NewRouter()
 	router.Use(httpmw.SetTraceIdMW(), middleware.SetClaimsMW(jr))
@@ -96,42 +97,17 @@ func initServer(secretKey string) *httptest.Server {
 	return httptest.NewServer(router)
 }
 
-func createAccessToken(t *testing.T, secretKey, userId string, authorities []string) string {
-	now := time.Now()
-
-	accessToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256,
-		&jwtresolver.CustomClaims{
-			UserId:      userId,
-			Authorities: authorities,
-			RegisteredClaims: jwt.RegisteredClaims{
-				Issuer:    "careerhub.jyo-liar.com",
-				Audience:  []string{"careerhub.jyo-liar.com"},
-				ExpiresAt: jwt.NewNumericDate(now.Add(30 * time.Hour)),
-				IssuedAt:  jwt.NewNumericDate(now),
-				NotBefore: jwt.NewNumericDate(now),
-			},
-		},
-	).SignedString([]byte(secretKey))
-
-	require.NoError(t, err)
-
-	return accessToken
+func createExpiredToken(t *testing.T, zitadel *tokentest.FakeZitadel, userId string) string {
+	return zitadel.IssueToken(&jwtresolver.CustomClaims{
+		RegisteredClaims: tokentest.RegisteredClaims(userId, time.Now().Add(-2*time.Hour), time.Hour),
+	})
 }
 
-func createExpiredToken(t *testing.T, secretKey, userId string) string {
-	now := time.Now()
-
-	accessToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256,
-		&jwtresolver.CustomClaims{
-			UserId: userId,
-			RegisteredClaims: jwt.RegisteredClaims{
-				ExpiresAt: jwt.NewNumericDate(now.Add(-time.Hour)),
-				IssuedAt:  jwt.NewNumericDate(now.Add(-2 * time.Hour)),
-			},
-		},
-	).SignedString([]byte(secretKey))
-
-	require.NoError(t, err)
-
-	return accessToken
+// createWrongKeyToken은 JWKS에 없는 다른 RSA 키로 서명한다 — 서명 불일치.
+func createWrongKeyToken(t *testing.T, zitadel *tokentest.FakeZitadel, userId string) string {
+	other := tokentest.NewFakeZitadel(t)
+	other.Kid = zitadel.Kid // kid는 같지만 키가 다르다 — 재조회로도 통과 불가
+	return other.IssueToken(&jwtresolver.CustomClaims{
+		RegisteredClaims: tokentest.RegisteredClaims(userId, time.Now(), time.Hour),
+	})
 }

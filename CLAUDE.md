@@ -35,7 +35,9 @@ go test -timeout 60s ./test/controller/...
 | `USERINFO_GRPC_ENDPOINT` | 사용자정보 gRPC 서비스 주소 |
 | `REVIEW_GRPC_ENDPOINT` | 리뷰 gRPC 서비스 주소 |
 | `API_PORT` | HTTP 서버 포트 |
-| `SECRET_KEY` | JWT 서명 키 |
+| `OIDC_ISSUER` | 토큰 발급자(`iss` 기대값) — Zitadel 인스턴스 URL |
+| `OIDC_AUDIENCE` | `aud`에 포함돼야 하는 값 (careerhub-web client_id) |
+| `OIDC_JWKS_URL` | (선택) JWKS 엔드포인트 — 비면 `{OIDC_ISSUER}/oauth/v2/keys` |
 | `ACCESS_CONTROL_ALLOW_ORIGIN` | (선택) CORS 허용 origin |
 | `ROOT_PATH` | (선택) API 경로 prefix |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | (관측) OTLP gRPC 엔드포인트 — 트레이스 수집 |
@@ -67,7 +69,7 @@ HTTP 요청 → Gorilla Mux Router
   세 모듈 모두 Go 패키지 이름은 `restapi_grpc`다(경로 마지막 요소와 다르므로 import에 별칭을 명시한다). 계약이 바뀌면 provider가 새 좌표를 공표하고, 이 저장소는 핀을 올린다 — 여기서 proto를 두거나 재생성하지 않는다. **저장소가 private이라 `GOPRIVATE=github.com/jyoliar-careerhub/*`와 자격증명이 필요하다.**
 - **`common/domain/`** — 공유 도메인 모델 (JobPosting, Review, ScrapJob, MatchJob)
 - **`common/query/`** — 쿼리 필터링 로직
-- **`jwtresolver/`** — JWT 토큰 파싱 및 Claims 관리
+- **`jwtresolver/`** — Zitadel 발급 JWT의 JWKS 로컬 검증(ADR-0029: RS256 고정·`iss`/`aud`/`exp`) 및 Claims 관리. JWKS 캐시는 제어 경로다 — 발급자 정지 중에도 캐시로 검증이 지속된다
 - **`middleware/`** — JWT Claims 주입(SetClaimsMW), OTel trace/span ID 로그 부착(TraceContextLoggerMW), 미들웨어 발신 에러의 ErrorResponse 응답
 - **`observability/`** — OTel 트레이서 초기화 (OTLP gRPC exporter)
 - **`vars/`** — 환경변수 로딩
@@ -79,7 +81,7 @@ HTTP 요청 → Gorilla Mux Router
 - **요청 검증**: 내장 명세(`GetSwagger`) 기반 검증 미들웨어가 파라미터·본문의 형식 위반을 핸들러 도달 전에 400으로 거부
 - **비동기 데이터 보강**: `goutils/cchan/async.ExecAsync()`를 사용하여 gRPC 호출을 병렬 실행. 보강 데이터(리뷰, 스크랩) 로딩 실패 시에도 부분 응답을 반환한다
 - **쿼리 인코딩**: 복잡한 검색 쿼리는 base64로 인코딩하여 요청 파라미터로 전달 (디코딩은 컨트롤러에서)
-- **인증**: `Authorization: Bearer {token}` 헤더에서 JWT 파싱. Claims에 userId와 authorities 포함. 무효 토큰은 원인 불문 401 + `ErrorResponse` JSON (RFC 6750)
+- **인증**: `Authorization: Bearer {token}` 헤더의 JWT를 JWKS로 로컬 검증(`Bearer ` prefix 필수). 사용자 식별은 `sub`, 권한은 `careerhub:authorities`(`{code, expiresAt}` — 만료 재확인은 `HasAuthority` 판정 시점). 무효 토큰은 원인 불문 401 + `ErrorResponse` JSON (RFC 6750)
 - **로그인 필수 검사**: 명세의 `security` 선언이 원천 — 명세 검증 미들웨어의 `AuthenticationFunc`가 claims 존재를 확인. `{}` 대안 선언 연산은 비로그인 허용
 - **권한 검사**: 생성 배선의 `requireAuthorityMW`(operationID 단위). 현재 MatchJob만 권한 필요 (`AUTHORITY_MATCH_JOB`)
 - **분산 트레이싱**: otelmux가 incoming `traceparent`에서 server span을 시작하고, otelgrpc StatsHandler가 업스트림 gRPC 호출에 W3C TraceContext를 전파한다. 로그에는 OTel trace_id/span_id가 자동 부착된다
@@ -104,6 +106,7 @@ HTTP 요청 → Gorilla Mux Router
 - **kin-openapi / nethttp-middleware** — 내장 명세 기반 요청 검증
 - **Gorilla Mux/Handlers** — HTTP 라우팅 및 CORS
 - **golang-jwt/jwt/v5** — JWT 처리
+- **MicahParks/keyfunc/v3 (+jwkset)** — JWKS 조회·캐시·`kid` 추종 (테스트의 가짜 JWKS 구성에도 jwkset 사용)
 - **OpenTelemetry** (otel SDK, otelmux, otelgrpc, OTLP gRPC exporter) — 분산 트레이싱
 - **google.golang.org/grpc** — gRPC 클라이언트
 - **github.com/jae2274/goutils** — 로깅(llog), 에러 핸들링(terr), 비동기(cchan) 유틸리티
