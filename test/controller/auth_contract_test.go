@@ -178,3 +178,49 @@ func TestAuthContract_SecuritySweepFromSpec(t *testing.T) {
 	require.NotZero(t, publicOps)
 	require.NotZero(t, protectedOps)
 }
+
+// 동의 게이트의 계약 테스트 (jyoliar-lab/ops-workflow#54):
+// 보호 연산(비로그인 대안이 없는 연산)은 필수 약관 동의 충족을 요구한다 — 미충족 403 +
+// ErrorResponse JSON. 판정 입력은 클레임(`careerhub:agreements_fulfilled`)뿐이다 —
+// 이 테스트 서버에 원장으로 가는 배선 자체가 없다(fake 업스트림 3종뿐)는 것이 그 증명이다.
+func TestAuthContract_AgreementsGateBySpecSecurity(t *testing.T) {
+	unfulfilled := testZitadel.IssueToken(&jwtresolver.CustomClaims{
+		AgreementsFulfilled: false,
+		RegisteredClaims:    tokentest.RegisteredClaims("user-1", time.Now(), 10*time.Minute),
+	})
+
+	f := newFakes()
+	server, _ := newStrictTestServer(t, f)
+
+	// 보호 연산 — 권한이 안 걸리는 scrap-job도, 권한까지 걸리는 match-job도 403이다.
+	protected := []struct {
+		method string
+		path   string
+	}{
+		{http.MethodGet, "/api/my/scrap-job"},
+		{http.MethodGet, "/api/my/match-job"},
+	}
+	for _, ep := range protected {
+		resp, body := doRequest(t, ep.method, server.URL+ep.path, unfulfilled, nil)
+		require.Equal(t, http.StatusForbidden, resp.StatusCode, "path %s body: %s", ep.path, body)
+		assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+		var errResp api.ErrorResponse
+		require.NoError(t, json.Unmarshal(body, &errResp))
+		assert.Equal(t, "Forbidden", errResp.Message)
+	}
+
+	// 공개 연산(비로그인 대안 선언)은 미충족 토큰으로도 통과한다 — 게이트는 보호 기능에만 선다.
+	query := encodeQuery(t, map[string]any{})
+	resp, body := doRequest(t, http.MethodGet, server.URL+"/api/job_postings?page=1&size=10&encoded_query="+query, unfulfilled, nil)
+	require.Equal(t, http.StatusOK, resp.StatusCode, "body: %s", body)
+}
+
+// 충족 토큰은 게이트를 지난다 — 기존 통과 시험들(newToken은 충족 토큰을 낸다)이 회귀망이지만,
+// 게이트 도입 커밋의 의도를 이 파일 안에서 대칭으로 못 박는다.
+func TestAuthContract_AgreementsFulfilledPasses(t *testing.T) {
+	f := newFakes()
+	server, _ := newStrictTestServer(t, f)
+
+	resp, body := doRequest(t, http.MethodGet, server.URL+"/api/my/scrap-job", newToken(t, "user-1", nil), nil)
+	require.Equal(t, http.StatusOK, resp.StatusCode, "body: %s", body)
+}

@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
+	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/gorilla/mux"
 	"github.com/jae2274/careerhub-api-composer/careerhub/apicomposer/api"
@@ -46,11 +48,18 @@ func NewStrictServer(
 // NewStrictHTTPHandler는 strict 구현을 생성 배선(HandlerWithOptions)으로 라우터에 얹는다.
 // 에러 계약: 생성 코드가 잡는 오류(파라미터 바인딩·본문 디코드 실패 등)도 핸들러 밖 오류도
 // 전부 명세의 ErrorResponse(application/json)로 나간다 — 기본 핸들러(http.Error, text/plain)를 쓰지 않는다.
-// 권한: matchJob 연산에는 기존 CheckHasAuthority(라우터 단위)를 operationID 단위로 옮긴
-// 권한 미들웨어가 걸린다 — 401/403도 ErrorResponse(JSON)다.
-func NewStrictHTTPHandler(ssi api.StrictServerInterface, baseRouter *mux.Router) http.Handler {
+// 관문 둘이 operationID 단위로 걸린다 — 401/403 모두 ErrorResponse(JSON)다:
+//   - 동의 게이트: 보호 연산 전부(명세에서 파생)에 필수 약관 동의 충족을 요구한다(ops-workflow#54)
+//   - 권한: matchJob 연산에 AUTHORITY_MATCH_JOB을 요구한다
+func NewStrictHTTPHandler(ssi api.StrictServerInterface, baseRouter *mux.Router) (http.Handler, error) {
+	swagger, err := api.GetSpec()
+	if err != nil {
+		return nil, err
+	}
+
 	si := api.NewStrictHandlerWithOptions(ssi,
 		[]api.StrictMiddlewareFunc{
+			requireAgreementsMW(protectedOperations(swagger)),
 			requireAuthorityMW(user_authority.AuthorityMatchJob, matchJobOperations),
 		},
 		api.StrictHTTPServerOptions{
@@ -60,7 +69,7 @@ func NewStrictHTTPHandler(ssi api.StrictServerInterface, baseRouter *mux.Router)
 	return api.HandlerWithOptions(si, api.GorillaServerOptions{
 		BaseRouter:       baseRouter,
 		ErrorHandlerFunc: writeErrorResponse(http.StatusBadRequest),
-	})
+	}), nil
 }
 
 // NewSpecValidationMW는 들어오는 요청을 내장 명세(GetSpec)와 대조하는 미들웨어를 만든다.
@@ -116,6 +125,56 @@ var matchJobOperations = map[string]bool{
 	"UpdateMatchJobCondition": true,
 	"DeleteMatchJobCondition": true,
 	"UpdateAgreeToMail":       true,
+}
+
+// protectedOperations — 명세에서 파생한 보호 연산의 집합(생성 operationID 이름).
+// "bearerAuth만 요구하고 비로그인 대안(`{}`)이 없는 연산"이 곧 보호 기능이다 —
+// 손으로 두 번째 목록을 유지하면 명세의 security 선언과 조용히 갈라지므로 파생한다.
+func protectedOperations(swagger *openapi3.T) map[string]bool {
+	operations := map[string]bool{}
+	for _, pathItem := range swagger.Paths.Map() {
+		for _, operation := range pathItem.Operations() {
+			if operation.Security == nil || len(*operation.Security) == 0 {
+				continue
+			}
+			gated := true
+			for _, requirement := range *operation.Security {
+				if len(requirement) == 0 { // `{}` 대안 — 비로그인 허용 연산
+					gated = false
+				}
+			}
+			if gated {
+				// strict 미들웨어가 받는 operationID는 생성된 메서드 이름(첫 글자 대문자)이다.
+				operations[strings.ToUpper(operation.OperationID[:1])+operation.OperationID[1:]] = true
+			}
+		}
+	}
+	return operations
+}
+
+// requireAgreementsMW — 보호 연산의 필수 약관 동의 게이트(ops-workflow#54).
+// 판정 입력은 클레임(`careerhub:agreements_fulfilled`)뿐이다 — 요청 경로에서 동의 상태를
+// 조회하지 않는다(ADR-0031). 프론트의 온보딩 유도는 UX 게이트고, 집행은 이 403이 진다.
+// 클레임은 발급 시점 스냅샷이라 동의 완료의 발효는 토큰 갱신에 묶인다 — 그 갱신 트리거는
+// 앱(careerhub-web) 흐름의 몫이다.
+func requireAgreementsMW(operationIDs map[string]bool) api.StrictMiddlewareFunc {
+	return func(f api.StrictHandlerFunc, operationID string) api.StrictHandlerFunc {
+		if !operationIDs[operationID] {
+			return f
+		}
+		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error) {
+			claims, ok := middleware.GetClaims(ctx)
+			if !ok {
+				middleware.WriteError(w, http.StatusUnauthorized, middleware.MessageUnauthorized)
+				return nil, nil
+			}
+			if !claims.AgreementsFulfilled {
+				middleware.WriteError(w, http.StatusForbidden, messageForbidden)
+				return nil, nil
+			}
+			return f(ctx, w, r, request)
+		}
+	}
 }
 
 // requireAuthorityMW는 지정 연산에만 권한을 요구하는 strict 미들웨어다.

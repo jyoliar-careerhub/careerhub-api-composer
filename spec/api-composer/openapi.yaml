@@ -13,9 +13,13 @@ info:
       무효 원인은 본문에 노출하지 않는다 — 구분은 서버 로그로만 남는다.
     - 로그인 필수 여부는 각 연산의 `security` 선언이 원천이다 — `bearerAuth` 요구 연산에
       비로그인으로 접근하면 401, `{}` 대안이 선언된 연산은 비로그인 접근을 허용한다.
+    - **보호 연산(비로그인 대안 `{}`가 없는 연산)은 필수 약관 동의 충족을 함께 요구한다** —
+      판정 입력은 토큰 클레임(`careerhub:agreements_fulfilled`)뿐이고(ADR-0031 — 발급 시점
+      스냅샷, 요청 경로에 원장 조회가 없다), 미충족은 403이다. 미충족 사용자도 토큰은
+      발급되므로(ADR-0028) 온보딩 유도는 프론트의 UX 게이트가 지고, 집행은 이 403이 진다.
     - 에러 응답은 어떤 경로(핸들러·생성 코드·미들웨어)로 끊기든 구조화 JSON(`ErrorResponse`)이다.
     - 모든 경로는 배포 환경변수 `ROOT_PATH`의 prefix 아래에 마운트될 수 있다.
-  version: 0.3.0
+  version: 0.4.0
 servers:
   - url: /
     description: ROOT_PATH prefix 아래에 마운트될 수 있다 (배포 설정의 관할)
@@ -24,9 +28,9 @@ tags:
   - name: job-postings
     description: 채용공고 조회 (공개, 로그인 시 스크랩 정보 부가)
   - name: scrap-job
-    description: 사용자 스크랩(북마크) 관리 (로그인 필요)
+    description: 사용자 스크랩(북마크) 관리 (로그인 + 필수 약관 동의 충족 필요)
   - name: match-job
-    description: 사용자 매칭 조건 관리 (로그인 + AUTHORITY_MATCH_JOB 권한 필요)
+    description: 사용자 매칭 조건 관리 (로그인 + 필수 약관 동의 충족 + AUTHORITY_MATCH_JOB 권한 필요)
   - name: company-review
     description: 회사 리뷰 조회 (공개)
   - name: meta
@@ -240,6 +244,8 @@ paths:
                   $ref: '#/components/schemas/JobPosting'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '500':
           $ref: '#/components/responses/InternalServerError'
     post:
@@ -259,6 +265,8 @@ paths:
           description: 스크랩 추가됨 (본문 없음)
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '500':
           $ref: '#/components/responses/InternalServerError'
     delete:
@@ -278,6 +286,8 @@ paths:
           description: 스크랩 제거됨 (본문 없음)
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '500':
@@ -303,6 +313,8 @@ paths:
                   $ref: '#/components/schemas/ScrapJob'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -322,6 +334,8 @@ paths:
                 $ref: '#/components/schemas/ScrapTagsResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '500':
           $ref: '#/components/responses/InternalServerError'
     post:
@@ -341,6 +355,8 @@ paths:
           description: 태그 추가됨 (본문 없음)
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '500':
@@ -362,6 +378,8 @@ paths:
           description: 태그 제거됨 (본문 없음)
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '500':
@@ -635,7 +653,7 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     Forbidden:
-      description: 필요 권한 없음
+      description: 로그인은 됐으나 연산이 요구하는 조건(필수 약관 동의 충족·권한)이 없음
       content:
         application/json:
           schema:
