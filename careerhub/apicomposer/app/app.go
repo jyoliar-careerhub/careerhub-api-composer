@@ -141,7 +141,8 @@ func Run(mainCtx context.Context) {
 		controller.NewReviewStrictController(reviewService),
 		metaController,
 	)
-	controller.NewStrictHTTPHandler(strictServer, rootRouter)
+	_, err = controller.NewStrictHTTPHandler(strictServer, rootRouter)
+	checkErr(mainCtx, err)
 
 	var allowOrigins []string
 	if envVars.AccessControlAllowOrigin != nil {

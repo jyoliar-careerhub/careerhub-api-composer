@@ -328,7 +328,8 @@ func newStrictTestServer(t *testing.T, f *fakes) (*httptest.Server, *tracetest.S
 		controller.NewReviewStrictController(review.NewReviewService(f.review)),
 		metaController,
 	)
-	controller.NewStrictHTTPHandler(strictServer, rootRouter)
+	_, err = controller.NewStrictHTTPHandler(strictServer, rootRouter)
+	require.NoError(t, err)
 
 	server := httptest.NewServer(rootRouter)
 	t.Cleanup(server.Close)
